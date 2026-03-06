@@ -1,12 +1,12 @@
 # Portfolio Tracker
 
-A comprehensive portfolio tracker that aggregates balances from **bank accounts** (via Plaid), **brokerage accounts**, **centralized crypto exchanges** (e.g. Binance, Coinbase, Kraken), and **blockchain wallets** (Bitcoin, EVM chains, Solana). All API keys and wallet addresses are stored **encrypted at rest** and never exposed in API responses or logs.
+A comprehensive portfolio tracker that aggregates balances from **bank accounts** (via Plaid), **brokerage accounts**, **centralized crypto exchanges** (e.g. Bybit, Coinbase, Kraken), and **blockchain wallets** (Bitcoin, EVM chains, Solana). All API keys and wallet addresses are stored **encrypted at rest** and never exposed in API responses or logs.
 
 ## Features
 
 - **Banks & brokerage** – Link US accounts via [Plaid](https://plaid.com) (API required).
 - **Centralized exchanges** – Add any [CCXT](https://github.com/ccxt/ccxt)-supported exchange with API key + secret (stored encrypted).
-- **Blockchain wallets** – Read-only by address (no private keys): Bitcoin (mempool.space), EVM (Ethereum, Polygon, Arbitrum, Optimism, Base, Avalanche, BSC, HyperEVM, HyperCore), Solana.
+- **Blockchain wallets** – Read-only by address (no private keys): Bitcoin (mempool.space), EVM (Ethereum, Polygon, Arbitrum, Optimism, Base, Avalanche, BSC, Hyperliquid), Solana.
 - **Secure storage** – Credentials encrypted with Fernet (key from `ENCRYPTION_KEY` or derived from `SECRET_KEY`).
 - **Local-only, no sign-in** – Create and switch between **profiles** on your device. No email, no cloud. Export a profile to a file to back it up or move it to another machine; import from a file to restore.
 
