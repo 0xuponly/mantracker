@@ -2,7 +2,28 @@
 import asyncio
 from typing import Any
 
+import httpx
+
 from app.adapters.base import AdapterResult, BalanceItem
+
+# Stablecoin fallback: Solana (Jupiter) -> Ethereum (DefiLlama) -> CoinGecko
+STABLECOIN_SOLANA_MINTS: dict[str, str] = {
+    "USDT": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+    "USDC": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+}
+STABLECOIN_ETHEREUM_CONTRACTS: dict[str, str] = {
+    "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "BUSD": "0x4Fabb145d26752Fb58a3F6b0dD8f9a7D3cA31Fc6",
+}
+STABLECOIN_COINGECKO_IDS: dict[str, str] = {
+    "USDT": "tether",
+    "USDC": "usd-coin",
+    "BUSD": "binance-usd",
+}
+JUPITER_LITE_PRICE_URL = "https://lite-api.jup.ag/price/v3"
+DEFILLAMA_PRICE_URL = "https://coins.llama.fi/prices/current"
+COINGECKO_SIMPLE_PRICE_URL = "https://api.coingecko.com/api/v3/simple/price"
 
 
 async def _get_ccxt():
@@ -135,6 +156,112 @@ async def _fetch_usd_prices(exchange: Any, currencies: list[str], is_async: bool
     return result
 
 
+def _is_stablecoin_for_fallback(currency: str) -> bool:
+    """True if we should try external fallback pricing (Solana/Ethereum/CoinGecko)."""
+    if not currency:
+        return False
+    u = currency.upper()
+    if u in ("USDT", "USDC", "BUSD"):
+        return True
+    if "USD" in u:
+        return True
+    return False
+
+
+async def _fetch_stablecoin_prices_fallback(currencies: list[str]) -> dict[str, float]:
+    """
+    Fallback USD prices for stablecoins when exchange has no ticker.
+    Order: Solana (Jupiter) -> Ethereum (DefiLlama) -> CoinGecko.
+    Returns only symbols that got a positive price.
+    """
+    if not currencies:
+        return {}
+    result: dict[str, float] = {}
+    still_missing = [c for c in currencies if c not in result or result.get(c, 0) <= 0]
+
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        # 1) Solana (Jupiter Lite) – only for symbols we have a mint
+        mints: list[str] = []
+        symbol_by_mint: dict[str, str] = {}
+        for c in still_missing:
+            mint = STABLECOIN_SOLANA_MINTS.get(c.upper()) or STABLECOIN_SOLANA_MINTS.get(c)
+            if mint:
+                mints.append(mint)
+                symbol_by_mint[mint] = c
+        if mints:
+            try:
+                ids = ",".join(mints[:50])
+                r = await client.get(f"{JUPITER_LITE_PRICE_URL}?ids={ids}")
+                r.raise_for_status()
+                data = r.json() or {}
+                for mint, info in data.items():
+                    if isinstance(info, dict) and "usdPrice" in info:
+                        try:
+                            price = float(info["usdPrice"])
+                            if price > 0 and mint in symbol_by_mint:
+                                result[symbol_by_mint[mint]] = price
+                        except (TypeError, ValueError):
+                            pass
+            except Exception:
+                pass
+        still_missing = [c for c in still_missing if c not in result or result.get(c, 0) <= 0]
+
+        # 2) Ethereum (DefiLlama)
+        eth_coins: list[str] = []
+        symbol_by_coin: dict[str, str] = {}
+        for c in still_missing:
+            addr = STABLECOIN_ETHEREUM_CONTRACTS.get(c.upper()) or STABLECOIN_ETHEREUM_CONTRACTS.get(c)
+            if addr:
+                key = f"ethereum:{addr}"
+                eth_coins.append(key)
+                symbol_by_coin[key] = c
+        if eth_coins:
+            try:
+                coins_param = ",".join(eth_coins[:30])
+                r = await client.get(f"{DEFILLAMA_PRICE_URL}/{coins_param}")
+                r.raise_for_status()
+                data = r.json()
+                coins = (data or {}).get("coins") or {}
+                for key, info in coins.items():
+                    if isinstance(info, dict) and "price" in info and key in symbol_by_coin:
+                        try:
+                            price = float(info["price"])
+                            if price > 0:
+                                result[symbol_by_coin[key]] = price
+                        except (TypeError, ValueError):
+                            pass
+            except Exception:
+                pass
+        still_missing = [c for c in still_missing if c not in result or result.get(c, 0) <= 0]
+
+        # 3) CoinGecko
+        cg_ids: list[str] = []
+        symbol_by_id: dict[str, str] = {}
+        for c in still_missing:
+            cg_id = STABLECOIN_COINGECKO_IDS.get(c.upper()) or STABLECOIN_COINGECKO_IDS.get(c)
+            if cg_id:
+                cg_ids.append(cg_id)
+                symbol_by_id[cg_id] = c
+        if cg_ids:
+            try:
+                ids_param = ",".join(cg_ids[:20])
+                r = await client.get(f"{COINGECKO_SIMPLE_PRICE_URL}?ids={ids_param}&vs_currencies=usd")
+                r.raise_for_status()
+                data = r.json() or {}
+                for cg_id, obj in data.items():
+                    if isinstance(obj, dict) and "usd" in obj and cg_id in symbol_by_id:
+                        try:
+                            price = float(obj["usd"])
+                            if price > 0:
+                                result[symbol_by_id[cg_id]] = price
+                        except (TypeError, ValueError):
+                            pass
+            except Exception:
+                pass
+
+    return result
+
+
 async def fetch_exchange_balances(provider: str, credential_payload: dict) -> AdapterResult:
     """Fetch balances from a supported exchange. Credentials from encrypted payload only."""
     ccxt, is_async = await _get_ccxt()
@@ -187,10 +314,16 @@ async def fetch_exchange_balances(provider: str, credential_payload: dict) -> Ad
                         usd_value=None,
                     )
                 )
-            # Resolve USD value for all assets (including stablecoins) via exchange tickers
+            # Resolve USD value for all assets via exchange tickers, then stablecoin fallbacks
             need_price = [b.asset for b in balances]
             if need_price:
                 prices = await _fetch_usd_prices(exchange, need_price, is_async)
+                # For stablecoins still missing a price: Solana (Jupiter) -> Ethereum (DefiLlama) -> CoinGecko
+                still_missing = [c for c in need_price if c not in prices]
+                stablecoin_missing = [c for c in still_missing if _is_stablecoin_for_fallback(c)]
+                if stablecoin_missing:
+                    fallback_prices = await _fetch_stablecoin_prices_fallback(stablecoin_missing)
+                    prices.update(fallback_prices)
                 if prices:
                     new_balances = []
                     for b in balances:

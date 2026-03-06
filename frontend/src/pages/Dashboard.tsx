@@ -370,10 +370,11 @@ export default function Dashboard() {
             const isRetrying = isError && retryTimersRef.current.has(acc.id)
             const showStaleLabel = hasCachedBalances && (isLoading || isRetrying)
 
-            const visibleBalances =
+            const visibleBalances = (
               hideLowBalance
                 ? state.balances.filter((b) => b.usd_value != null && b.usd_value >= LOW_BALANCE_THRESHOLD)
                 : state.balances
+            ).filter((b) => Number(b.amount) > 0)
             const accountUsd = visibleBalances.reduce((s, b) => s + (b.usd_value ?? 0), 0)
             totalUsd += accountUsd
             return (

@@ -106,6 +106,7 @@ async def get_account_balances(
             name=b.raw_name,
         )
         for b in (result.balances or [])
+        if b.amount and float(b.amount) > 0
     ]
     return AccountBalancesResponse(id=account.id, balances=balances, error=result.error)
 

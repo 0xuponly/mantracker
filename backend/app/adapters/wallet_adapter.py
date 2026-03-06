@@ -491,10 +491,21 @@ async def fetch_solana_balance(address: str) -> AdapterResult:
                 )
             )
 
-            # SPL tokens (by name/symbol, with USD)
+            # SPL tokens: only include if we have BOTH a real name (from token list) AND a non-zero price
             for mint, amount, _ in spl_items:
-                meta = token_list.get(mint) or {"symbol": mint[:8] + "…", "name": mint[:16] + "…"}
+                meta = token_list.get(mint)
+                has_name = False
+                if meta is not None:
+                    symbol_str = (meta.get("symbol") or "").strip()
+                    name_str = (meta.get("name") or "").strip()
+                    # Treat "?" or empty as "no name"
+                    if symbol_str not in ("", "?") or name_str not in ("", "?"):
+                        has_name = True
                 price = prices.get(mint)
+                has_price = price is not None and price > 0
+                # Skip tokens that don't have BOTH a usable name and a positive price.
+                if not (has_name and has_price):
+                    continue
                 usd = amount * price if price is not None else None
                 balances.append(
                     BalanceItem(
