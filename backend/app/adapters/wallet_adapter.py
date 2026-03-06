@@ -92,12 +92,17 @@ COINGECKO_PLATFORM_IDS = {
     "base": "base",
 }
 
-# Known ERC-20s per chain (contract, symbol, decimals) – fetched via eth_call when Alchemy omits them
+# Known ERC-20s per chain (contract, symbol, decimals) – fetched via eth_call when Alchemy omits them.
+# Includes staking/receipt tokens (e.g. stETH, staked DRV) so balances are detected even when not indexed.
 KNOWN_EVM_TOKENS: dict[str, list[tuple[str, str, int]]] = {
     "arbitrum": [
         ("0xaf88d065e77c8cc2239327c5edb3a432268e5831", "USDC", 6),
         ("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8", "USDC.e", 6),
         ("0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "USDT", 6),
+        ("0x77b7787a09818502305c95d68a2571f090abb135", "DRV", 18),
+    ],
+    "ethereum": [
+        ("0xae7ab96520de3a18e5e111b5eaab095312d7fe84", "stETH", 18),
     ],
 }
 
@@ -111,11 +116,13 @@ KNOWN_EVM_METADATA: dict[str, dict] = {
     "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": {"symbol": "WBTC", "name": "Wrapped BTC", "decimals": 8},
     "0x514910771af9ca656af840dff83e8264ecf986ca": {"symbol": "LINK", "name": "Chainlink", "decimals": 18},
     "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984": {"symbol": "UNI", "name": "Uniswap", "decimals": 18},
+    "0xae7ab96520de3a18e5e111b5eaab095312d7fe84": {"symbol": "stETH", "name": "Lido staked ETH", "decimals": 18},
     # Arbitrum
     "0xaf88d065e77c8cc2239327c5edb3a432268e5831": {"symbol": "USDC", "name": "USD Coin", "decimals": 6},
     "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8": {"symbol": "USDC.e", "name": "Bridged USDC", "decimals": 6},
     "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": {"symbol": "USDT", "name": "Tether USD", "decimals": 6},
     "0x82af49447d8a07e3bd95bd0d56f35241523fbab1": {"symbol": "WETH", "name": "Wrapped Ether", "decimals": 18},
+    "0x77b7787a09818502305c95d68a2571f090abb135": {"symbol": "DRV", "name": "Derive", "decimals": 18},
     # Base
     "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": {"symbol": "USDC", "name": "USD Coin", "decimals": 6},
     "0x4200000000000000000000000000000000000006": {"symbol": "WETH", "name": "Wrapped Ether", "decimals": 18},
