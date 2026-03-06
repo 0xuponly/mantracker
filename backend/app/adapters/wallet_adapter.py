@@ -80,6 +80,8 @@ DEFILLAMA_CHAIN_IDS = {
     "polygon": "polygon",
     "optimism": "optimism",
     "base": "base",
+    "avalanche": "avalanche",
+    "bsc": "bsc",
 }
 COINGECKO_TOKEN_PRICE_URL = "https://api.coingecko.com/api/v3/simple/token_price"
 COINGECKO_PLATFORM_IDS = {
@@ -97,6 +99,34 @@ KNOWN_EVM_TOKENS: dict[str, list[tuple[str, str, int]]] = {
         ("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8", "USDC.e", 6),
         ("0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "USDT", 6),
     ],
+}
+
+# Fallback metadata (contract_lower -> {symbol, name, decimals?}) for common tokens when APIs miss.
+KNOWN_EVM_METADATA: dict[str, dict] = {
+    # Ethereum
+    "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {"symbol": "USDC", "name": "USD Coin", "decimals": 6},
+    "0xdac17f958d2ee523a2206206994597c13d831ec7": {"symbol": "USDT", "name": "Tether USD", "decimals": 6},
+    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {"symbol": "WETH", "name": "Wrapped Ether", "decimals": 18},
+    "0x6b175474e89094c44da98b954eedeac495271d0f": {"symbol": "DAI", "name": "Dai Stablecoin", "decimals": 18},
+    "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": {"symbol": "WBTC", "name": "Wrapped BTC", "decimals": 8},
+    "0x514910771af9ca656af840dff83e8264ecf986ca": {"symbol": "LINK", "name": "Chainlink", "decimals": 18},
+    "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984": {"symbol": "UNI", "name": "Uniswap", "decimals": 18},
+    # Arbitrum
+    "0xaf88d065e77c8cc2239327c5edb3a432268e5831": {"symbol": "USDC", "name": "USD Coin", "decimals": 6},
+    "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8": {"symbol": "USDC.e", "name": "Bridged USDC", "decimals": 6},
+    "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": {"symbol": "USDT", "name": "Tether USD", "decimals": 6},
+    "0x82af49447d8a07e3bd95bd0d56f35241523fbab1": {"symbol": "WETH", "name": "Wrapped Ether", "decimals": 18},
+    # Base
+    "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": {"symbol": "USDC", "name": "USD Coin", "decimals": 6},
+    "0x4200000000000000000000000000000000000006": {"symbol": "WETH", "name": "Wrapped Ether", "decimals": 18},
+    # Polygon
+    "0x2791bca1f2de4661ed88a30c99a7a9449aa84174": {"symbol": "USDC", "name": "USD Coin", "decimals": 6},
+    "0xc2132d05d31c914a87c6611c10748aeb04b58e8f": {"symbol": "USDT", "name": "Tether USD", "decimals": 6},
+    "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619": {"symbol": "WETH", "name": "Wrapped Ether", "decimals": 18},
+    # Optimism
+    "0x0b2c639c533813f4aa9d7837caf62653d097ff85": {"symbol": "USDC", "name": "USD Coin", "decimals": 6},
+    "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": {"symbol": "USDT", "name": "Tether USD", "decimals": 6},
+    "0x4200000000000000000000000000000000000006": {"symbol": "WETH", "name": "Wrapped Ether", "decimals": 18},
 }
 
 # Native token CoinGecko ids for EVM chains (ETH, MATIC, etc.)
@@ -230,6 +260,129 @@ async def _fetch_erc20_usd_prices_alchemy(chain: str, contracts: list[str]) -> d
         pass
     return out
 
+
+def _evm_metadata_fallback_display(contract: str) -> str:
+    """Fallback display when no symbol/name available (truncated address)."""
+    c = (contract or "").strip()
+    if len(c) <= 16:
+        return c or "?"
+    return c[:10] + "…"
+
+
+_DEFILLAMA_METADATA_BATCH = 20  # avoid URL length limits and timeouts
+
+
+async def _fetch_evm_token_metadata(
+    chain: str, contracts: list[str]
+) -> dict[str, dict]:
+    """
+    Fetch symbol, name, and decimals for ERC-20 contracts. Returns dict[contract_lower, {"symbol", "name", "decimals"}].
+    Order: known-token map -> Alchemy getTokenMetadata (all) -> DefiLlama in batches for missing.
+    """
+    if not contracts:
+        return {}
+    chain_lower = chain.lower()
+    unique = sorted({(c or "").strip().lower() for c in contracts if c})
+    if not unique:
+        return {}
+    out: dict[str, dict] = {}
+
+    # 1) Known-token fallback so common tokens always have a name (and decimals)
+    for addr in unique:
+        known = KNOWN_EVM_METADATA.get(addr)
+        if known:
+            out[addr] = {k: v for k, v in known.items() if v is not None}
+
+    async with httpx.AsyncClient() as client:
+        # 2) Alchemy getTokenMetadata for ALL contracts (best source for name + symbol on this chain)
+        key = (get_settings().alchemy_api_key or "").strip()
+        network = ALCHEMY_NETWORK.get(chain_lower)
+        if key and network:
+            url = f"https://{network}.g.alchemy.com/v2/{key}"
+            sem = asyncio.Semaphore(8)
+
+            async def one_meta(addr: str) -> tuple[str, dict | None]:
+                async with sem:
+                    try:
+                        r = await client.post(
+                            url,
+                            json={
+                                "jsonrpc": "2.0",
+                                "id": 1,
+                                "method": "alchemy_getTokenMetadata",
+                                "params": [addr],
+                            },
+                            timeout=8.0,
+                        )
+                        r.raise_for_status()
+                        res = (r.json() or {}).get("result")
+                        if isinstance(res, dict) and (res.get("symbol") or res.get("name")):
+                            return (
+                                addr,
+                                {
+                                    "symbol": (res.get("symbol") or "").strip() or None,
+                                    "name": (res.get("name") or "").strip() or None,
+                                    "decimals": res.get("decimals"),
+                                },
+                            )
+                    except Exception:
+                        pass
+                return (addr, None)
+
+            results = await asyncio.gather(*(one_meta(a) for a in unique))
+            for addr, meta in results:
+                if meta:
+                    if addr not in out:
+                        out[addr] = {}
+                    if meta.get("symbol"):
+                        out[addr]["symbol"] = meta["symbol"]
+                    if meta.get("name"):
+                        out[addr]["name"] = meta["name"]
+                    if meta.get("decimals") is not None:
+                        try:
+                            out[addr]["decimals"] = int(meta["decimals"])
+                        except (TypeError, ValueError):
+                            pass
+
+        # 3) DefiLlama in batches for contracts still missing symbol/decimals (avoids long URLs)
+        llama_chain = DEFILLAMA_CHAIN_IDS.get(chain_lower)
+        missing = [a for a in unique if not (out.get(a) and out[a].get("symbol"))]
+        if llama_chain and missing:
+            for i in range(0, len(missing), _DEFILLAMA_METADATA_BATCH):
+                batch = missing[i : i + _DEFILLAMA_METADATA_BATCH]
+                try:
+                    coins_param = ",".join(f"{llama_chain}:{a}" for a in batch)
+                    r = await client.get(f"{DEFILLAMA_COINS_URL}/{coins_param}", timeout=10.0)
+                    r.raise_for_status()
+                    data = r.json() or {}
+                    for key, info in (data.get("coins") or {}).items():
+                        if not isinstance(info, dict):
+                            continue
+                        parts = key.split(":", 1)
+                        if len(parts) != 2:
+                            continue
+                        addr = parts[1].lower()
+                        sym = (info.get("symbol") or "").strip()
+                        dec = info.get("decimals")
+                        if sym or dec is not None:
+                            if addr not in out:
+                                out[addr] = {}
+                            if sym:
+                                out[addr]["symbol"] = sym
+                            if dec is not None:
+                                try:
+                                    out[addr]["decimals"] = int(dec)
+                                except (TypeError, ValueError):
+                                    pass
+                except Exception:
+                    pass
+
+    for addr in list(out):
+        entry = out[addr]
+        if not entry.get("symbol") and entry.get("name"):
+            entry["symbol"] = (entry["name"] or "")[:12] or None
+    return out
+
 # Rate-limit Solana public RPC: one request at a time, delay between calls, retry on 429.
 # Keep the lock scope tight (only around the HTTP request + short pacing) so 429 backoffs
 # don't block unrelated calls and cause cascading timeouts.
@@ -314,7 +467,7 @@ async def fetch_btc_balance(address: str) -> AdapterResult:
     satoshi = funded - spent
     btc = satoshi / 100_000_000.0
     return AdapterResult(
-        balances=[BalanceItem(asset="BTC", amount=btc, currency="BTC", raw_name=address[:16] + "...")]
+        balances=[BalanceItem(asset="BTC", amount=btc, currency="BTC", raw_name="Bitcoin")]
     )
 
 
@@ -442,7 +595,7 @@ async def fetch_hypercore_balance(address: str) -> AdapterResult:
                 amount=total_withdrawable,
                 currency="USD",
                 usd_value=total_withdrawable,
-                raw_name="Withdrawable (USD)",
+                raw_name="USD",
             )
         )
 
@@ -593,43 +746,44 @@ async def fetch_evm_balances_alchemy(chain: str, address: str) -> AdapterResult:
     result = data.get("result") or {}
     tokens = result.get("tokenBalances") or []
 
-    # Collect non-zero balances and their contracts so we can price them.
-    items: list[tuple[str, float]] = []  # (contract_address_lower, amount)
-    symbols: dict[str, str] = {}         # contract_address_lower -> display symbol (truncated address)
+    # Collect non-zero balances: (contract_lower, raw_balance_int) so we can apply decimals from metadata.
+    items: list[tuple[str, int]] = []
     for t in tokens:
         try:
             raw = t.get("tokenBalance")
             if not raw:
                 continue
-            # Alchemy returns hex (e.g. "0x123...") or decimal string
             if isinstance(raw, str) and raw.startswith("0x"):
                 value = int(raw, 16)
             else:
                 value = int(raw)
             if value <= 0:
                 continue
-            # Without metadata we can't know decimals; assume 18 (standard ERC-20) for display.
-            amount = value / 10**18
-            if amount <= 0:
-                continue
             contract = (t.get("contractAddress") or "").lower()
             if not contract:
                 continue
-            items.append((contract, amount))
-            if contract not in symbols:
-                symbols[contract] = (t.get("contractAddress") or "")[:12] + "…"
+            items.append((contract, value))
         except (ValueError, TypeError):
             continue
 
     if not items:
         return AdapterResult(balances=[])
 
-    # Try to get USD prices for these ERC-20s from Alchemy Prices API.
-    prices = await _fetch_erc20_usd_prices_alchemy(chain, [c for (c, _) in items])
+    contracts_list = [c for (c, _) in items]
+    metadata = await _fetch_evm_token_metadata(chain, contracts_list)
+    prices = await _fetch_erc20_usd_prices_alchemy(chain, contracts_list)
 
     balances: list[BalanceItem] = []
-    for contract, amount in items:
-        symbol = symbols.get(contract) or (contract[:10] + "…")
+    for contract, raw_value in items:
+        meta = metadata.get(contract) or {}
+        decimals = meta.get("decimals")
+        if decimals is None:
+            decimals = 18
+        amount = raw_value / (10**decimals)
+        if amount <= 0:
+            continue
+        symbol = (meta.get("symbol") or "").strip() or _evm_metadata_fallback_display(contract)
+        raw_name = (meta.get("name") or "").strip() or None
         usd_price = prices.get(contract)
         usd_value = amount * usd_price if usd_price is not None else None
         balances.append(
@@ -638,7 +792,7 @@ async def fetch_evm_balances_alchemy(chain: str, address: str) -> AdapterResult:
                 amount=amount,
                 currency=symbol,
                 usd_value=usd_value,
-                raw_name=address[:16] + "...",
+                raw_name=raw_name,
             )
         )
     return AdapterResult(balances=balances)
@@ -679,7 +833,7 @@ async def _fetch_evm_native_balance(chain: str, address: str, rpc_url: str | Non
         amount=amount,
         currency=symbol,
         usd_value=usd_value,
-        raw_name=address[:16] + "...",
+        raw_name=symbol,
     )
 
 

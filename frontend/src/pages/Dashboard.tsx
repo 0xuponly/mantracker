@@ -21,6 +21,15 @@ type BalanceState = {
   fetchedAt: number | null
 }
 
+function displayBalanceName(b: BalanceItem): string {
+  const n = (b.name ?? '').trim()
+  if (!n) return b.asset
+  const looksLikeAddress =
+    /^0x[0-9a-fA-F]{6,}$/.test(n) ||
+    (n.endsWith('...') && !n.includes(' '))
+  return looksLikeAddress ? b.asset : n
+}
+
 function balanceKey(b: BalanceItem): string {
   // Key should be stable across refreshes.
   // Asset symbol + optional chain is enough for our adapters today; include currency for safety.
@@ -422,7 +431,7 @@ export default function Dashboard() {
                         return (
                           <li key={i}>
                             <span className="asset">
-                              {b.name || b.asset}
+                              {displayBalanceName(b)}
                               {b.chain ? ` (${b.chain})` : ''}
                             </span>
                             <span className="ticker">{b.currency || b.asset}</span>
