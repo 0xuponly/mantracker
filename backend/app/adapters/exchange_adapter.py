@@ -1,5 +1,7 @@
 """Centralized crypto exchange adapter via CCXT. Uses encrypted api_key/secret."""
 import asyncio
+from typing import Any
+
 from app.adapters.base import AdapterResult, BalanceItem
 
 
@@ -17,6 +19,54 @@ async def _get_ccxt():
             return ccxt, False
         except Exception:
             return None, False
+
+
+def _price_from_ticker(ticker: dict[str, Any]) -> float | None:
+    """Extract last price from a CCXT ticker dict."""
+    if not ticker:
+        return None
+    last = ticker.get("last")
+    if last is not None:
+        try:
+            return float(last)
+        except (TypeError, ValueError):
+            pass
+    close = ticker.get("close")
+    if close is not None:
+        try:
+            return float(close)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+async def _fetch_usd_prices(exchange: Any, currencies: list[str], is_async: bool) -> dict[str, float]:
+    """
+    Fetch USD-denominated prices for the given currencies via exchange tickers.
+    Tries USDT, USD, then BUSD quote pairs. Returns dict of currency -> price.
+    """
+    if not currencies:
+        return {}
+    try:
+        if is_async:
+            tickers = await exchange.fetch_tickers()
+        else:
+            tickers = await asyncio.to_thread(exchange.fetch_tickers)
+    except Exception:
+        return {}
+    if not tickers:
+        return {}
+    quote_order = ("USDT", "USD", "BUSD")
+    result: dict[str, float] = {}
+    for currency in currencies:
+        for quote in quote_order:
+            symbol = f"{currency}/{quote}"
+            ticker = tickers.get(symbol) if isinstance(tickers, dict) else None
+            price = _price_from_ticker(ticker) if ticker else None
+            if price is not None and price > 0:
+                result[currency] = price
+                break
+    return result
 
 
 async def fetch_exchange_balances(provider: str, credential_payload: dict) -> AdapterResult:
@@ -76,6 +126,25 @@ async def fetch_exchange_balances(provider: str, credential_payload: dict) -> Ad
                         usd_value=usd,
                     )
                 )
+            # Resolve USD value for non-USD tokens (e.g. S, HYPE on Bybit) via exchange tickers
+            need_price = [b.asset for b in balances if b.usd_value is None]
+            if need_price:
+                prices = await _fetch_usd_prices(exchange, need_price, is_async)
+                if prices:
+                    new_balances = []
+                    for b in balances:
+                        if b.usd_value is None and b.asset in prices:
+                            new_balances.append(
+                                BalanceItem(
+                                    asset=b.asset,
+                                    amount=b.amount,
+                                    currency=b.currency,
+                                    usd_value=round(b.amount * prices[b.asset], 2),
+                                )
+                            )
+                        else:
+                            new_balances.append(b)
+                    balances = new_balances
             return AdapterResult(balances=balances)
         finally:
             # Async CCXT clients have an async close; sync ones don't.

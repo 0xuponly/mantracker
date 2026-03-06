@@ -80,7 +80,7 @@ Then use “Add account → Bank or brokerage” in the UI to open Plaid Link an
 ### Adding other accounts
 
 - **Exchange** – Choose provider (e.g. Binance), enter a label, API key, and secret. Optional passphrase for exchanges that use it (e.g. Coinbase). Credentials are encrypted before storage.
-- **Wallet** – Paste the **public address** only. Choose **EVM (all chains)** to see balances from every supported EVM chain (Ethereum, Polygon, Arbitrum, Optimism, Base, Avalanche, BSC, HyperEVM) in one place; or pick a single chain. **Solana** shows native SOL and all SPL tokens. **EVM** shows all tokens (native + ERC‑20) when `COVALENT_API_KEY` is set in backend `.env` (free at [covalenthq.com](https://www.covalenthq.com)); HyperEVM requires the key. With **EVM (all chains)**, one address is queried across all chains and each balance is labeled (e.g. "ETH (Ethereum)", "USDC (Arbitrum)").
+- **Wallet** – Paste the **public address** only. Choose **EVM (all chains)** to see balances from every supported EVM chain (Ethereum, Polygon, Arbitrum, Optimism, Base, Avalanche, BSC, HyperEVM) in one place; or pick a single chain. **Solana** shows native SOL and all SPL tokens. **EVM** can show all tokens (native + ERC‑20) when `ALCHEMY_API_KEY` is set in backend `.env`; otherwise you’ll see native balances only. With **EVM (all chains)**, one address is queried across all chains and each balance is labeled (e.g. "ETH (Ethereum)", "USDC (Arbitrum)").
 
 ## Security notes
 

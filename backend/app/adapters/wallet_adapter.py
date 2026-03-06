@@ -8,7 +8,8 @@ from app.config import get_settings
 # Public RPC endpoints (no API key). Override via env if needed.
 DEFAULT_RPC = {
     "ethereum": "https://eth.llamarpc.com",
-    "polygon": "https://polygon.llamarpc.com",
+    # Public Polygon RPC (no API key). If this ever rate-limits, consider switching to a keyed provider (Alchemy, etc.).
+    "polygon": "https://rpc.ankr.com/polygon",
     "arbitrum": "https://arb1.arbitrum.io/rpc",
     "optimism": "https://mainnet.optimism.io",
     "avalanche": "https://api.avax.network/ext/bc/C/rpc",
@@ -18,21 +19,15 @@ DEFAULT_RPC = {
     "hypercore": "https://rpc.hyperliquid.xyz/evm",
 }
 
-# Covalent chain names for balances_v2 API (all tokens). HyperEVM/HyperCore use same chain.
-COVALENT_CHAIN = {
+# Alchemy network slugs for chains we support
+ALCHEMY_NETWORK = {
     "ethereum": "eth-mainnet",
-    "polygon": "matic-mainnet",
-    "arbitrum": "arbitrum-mainnet",
-    "optimism": "optimism-mainnet",
+    "polygon": "polygon-mainnet",
+    "arbitrum": "arb-mainnet",
+    "optimism": "opt-mainnet",
     "base": "base-mainnet",
-    "avalanche": "avalanche-mainnet",
-    "bsc": "bsc-mainnet",
-    "hyperevm": "hyperevm-mainnet",
-    "hypercore": "hyperevm-mainnet",
+    "hyperevm": "hyperliquid",
 }
-
-# Chains that require Covalent for token balances (no native-only fallback)
-COVALENT_REQUIRED_CHAINS = frozenset({"hyperevm", "hypercore"})
 
 # All EVM chains to query when user adds "EVM (all chains)" (hypercore same as hyperevm, skip duplicate)
 EVM_CHAINS = [
@@ -62,6 +57,13 @@ CHAIN_DISPLAY_NAMES = {
 SOLANA_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 SOLANA_RPC_DEFAULT = "https://api.mainnet-beta.solana.com"
 SOLANA_SOL_MINT = "So11111111111111111111111111111111111111112"
+
+# HYPE (Hyperliquid) price sources (primary: CoinGecko, fallback: DIA)
+COINGECKO_HYPE_URL = "https://api.coingecko.com/api/v3/simple/price?ids=hyperliquid&vs_currencies=usd"
+DIA_HYPE_URL = "https://api.diadata.org/v1/assetQuotation/Hyperliquid/0x0d01dc56dcaaca66ad901c959b4011ec"
+
+_hype_price_cache: tuple[float, float] | None = None  # (price, fetched_at)
+_HYPE_PRICE_TTL = 60.0  # seconds
 
 # Rate-limit Solana public RPC: one request at a time, delay between calls, retry on 429.
 # Keep the lock scope tight (only around the HTTP request + short pacing) so 429 backoffs
@@ -151,6 +153,43 @@ async def fetch_btc_balance(address: str) -> AdapterResult:
     )
 
 
+async def _fetch_hype_usd_price(client: httpx.AsyncClient) -> float | None:
+    """Fetch HYPE/USD price, with small in-memory cache. Primary: CoinGecko; fallback: DIA."""
+    global _hype_price_cache
+    now = asyncio.get_running_loop().time()
+    if _hype_price_cache is not None:
+        price, ts = _hype_price_cache
+        if now - ts < _HYPE_PRICE_TTL:
+            return price
+
+    # Primary: CoinGecko
+    try:
+        r = await client.get(COINGECKO_HYPE_URL, timeout=6.0)
+        r.raise_for_status()
+        data = r.json()
+        price = float((data.get("hyperliquid") or {}).get("usd") or 0)
+        if price > 0:
+            _hype_price_cache = (price, now)
+            return price
+    except Exception:
+        pass
+
+    # Fallback: DIA
+    try:
+        r = await client.get(DIA_HYPE_URL, timeout=6.0)
+        r.raise_for_status()
+        data = r.json()
+        # DIA typically returns {"Price": 30.0, ...}
+        price = float(data.get("Price") or 0)
+        if price > 0:
+            _hype_price_cache = (price, now)
+            return price
+    except Exception:
+        pass
+
+    return None
+
+
 def _evm_native_symbol(chain: str) -> str:
     c = chain.lower()
     if c in ("ethereum", "arbitrum", "optimism", "base"):
@@ -166,38 +205,57 @@ def _evm_native_symbol(chain: str) -> str:
     return "ETH"
 
 
-async def fetch_evm_balances_covalent(chain: str, address: str) -> AdapterResult:
-    """Fetch all token balances (native + ERC-20) via Covalent. Requires COVALENT_API_KEY."""
-    key = get_settings().covalent_api_key
-    if not key or not key.strip():
-        return AdapterResult(balances=[], error="Covalent API key not set")
-    chain_name = COVALENT_CHAIN.get(chain.lower()) or COVALENT_CHAIN["ethereum"]
-    url = f"https://api.covalenthq.com/v1/{chain_name}/address/{address}/balances_v2/"
+async def fetch_evm_balances_alchemy(chain: str, address: str) -> AdapterResult:
+    """Fetch ERC-20 token balances via Alchemy's Token API. Native token handled separately."""
+    settings = get_settings()
+    key = (settings.alchemy_api_key or "").strip()
+    if not key:
+        return AdapterResult(balances=[], error="Alchemy API key not set")
+    network = ALCHEMY_NETWORK.get(chain.lower())
+    if not network:
+        return AdapterResult(balances=[], error=f"Alchemy does not support chain: {chain}")
+    url = f"https://{network}.g.alchemy.com/v2/{key}"
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "alchemy_getTokenBalances",
+        "params": [address, "erc20"],
+    }
     try:
         async with httpx.AsyncClient() as client:
-            r = await client.get(url, params={"key": key}, timeout=20.0)
+            r = await client.post(url, json=payload, timeout=20.0)
             r.raise_for_status()
             data = r.json()
     except Exception as e:
         return AdapterResult(balances=[], error=str(e))
 
-    items = data.get("data", {}).get("items") or []
-    balances = []
-    for item in items:
+    result = data.get("result") or {}
+    tokens = result.get("tokenBalances") or []
+    balances: list[BalanceItem] = []
+    for t in tokens:
         try:
-            balance = item.get("balance") or "0"
-            decimals = item.get("contract_decimals") or 18
-            amount = int(balance) / (10**decimals)
+            raw = t.get("tokenBalance")
+            if not raw:
+                continue
+            # Alchemy returns hex (e.g. \"0x123...\") or decimal string
+            if isinstance(raw, str) and raw.startswith("0x"):
+                value = int(raw, 16)
+            else:
+                value = int(raw)
+            if value <= 0:
+                continue
+            # Without metadata we can't know decimals; assume 18 (standard ERC-20) for display.
+            amount = value / 10**18
             if amount <= 0:
                 continue
-            symbol = (item.get("contract_ticker_symbol") or item.get("contract_name") or "?")[:20]
-            quote = (item.get("quote") or 0) or 0
+            contract_address = (t.get("contractAddress") or "")[:12] + "…" if t.get("contractAddress") else "token"
+            symbol = contract_address
             balances.append(
                 BalanceItem(
                     asset=symbol,
                     amount=amount,
                     currency=symbol,
-                    usd_value=float(quote) if quote else None,
+                    usd_value=None,
                     raw_name=address[:16] + "...",
                 )
             )
@@ -207,25 +265,18 @@ async def fetch_evm_balances_covalent(chain: str, address: str) -> AdapterResult
 
 
 async def fetch_evm_balance(chain: str, address: str, rpc_url: str | None = None) -> AdapterResult:
-    """Fetch all token balances via Covalent when key set; else native-only for most chains. HyperEVM/HyperCore require Covalent (all tokens only)."""
+    """Fetch token balances via Alchemy when key set; else native-only."""
     chain_lower = chain.lower()
-    key = get_settings().covalent_api_key
+    settings = get_settings()
+    alchemy_key = (settings.alchemy_api_key or "").strip()
 
-    if chain_lower in COVALENT_REQUIRED_CHAINS:
-        if not key or not key.strip():
-            return AdapterResult(
-                balances=[],
-                error="HyperEVM/HyperCore require COVALENT_API_KEY in backend .env for full token balances. Get a free key at covalenthq.com",
-            )
-        result = await fetch_evm_balances_covalent(chain, address)
-        return result
-
-    if key and key.strip():
-        result = await fetch_evm_balances_covalent(chain, address)
+    # Prefer Alchemy where available
+    if alchemy_key and chain_lower in ALCHEMY_NETWORK:
+        result = await fetch_evm_balances_alchemy(chain, address)
         if result.balances:
             return result
 
-    # Native-only fallback for chains that are not Covalent-required
+    # Native-only fallback
     url = rpc_url or DEFAULT_RPC.get(chain_lower, DEFAULT_RPC["ethereum"])
     payload = {
         "jsonrpc": "2.0",
@@ -245,12 +296,24 @@ async def fetch_evm_balance(chain: str, address: str, rpc_url: str | None = None
     wei = int(hex_balance, 16)
     amount = wei / 10**18
     symbol = _evm_native_symbol(chain)
+
+    usd_value = None
+    # Price HYPE on HyperEVM via public price APIs.
+    if chain_lower == "hyperevm" and amount > 0:
+        try:
+            async with httpx.AsyncClient() as client:
+                price = await _fetch_hype_usd_price(client)
+            if price is not None:
+                usd_value = amount * price
+        except Exception:
+            usd_value = None
     return AdapterResult(
         balances=[
             BalanceItem(
                 asset=symbol,
                 amount=amount,
                 currency=symbol,
+                usd_value=usd_value,
                 raw_name=address[:16] + "...",
             )
         ]

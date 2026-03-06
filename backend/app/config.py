@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     plaid_secret: str | None = None
     plaid_env: str = "sandbox"  # sandbox | development | production
 
-    # Optional: Covalent (full EVM token balances; without key, only native token is shown)
-    covalent_api_key: str | None = None
+    # Optional: Alchemy (preferred EVM token balances provider when key is set)
+    alchemy_api_key: str | None = None
 
     # Optional: Solana RPC URL (public RPC is rate-limited; set e.g. Helius/QuickNode for higher limits)
     solana_rpc_url: str | None = None

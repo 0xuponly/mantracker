@@ -65,6 +65,16 @@ export const unlockApi = {
     }),
 };
 
+export const settingsApi = {
+  apiKeysStatus: () =>
+    apiNoProfile<{ alchemy_api_key: boolean }>('/settings/api-keys'),
+  updateApiKeys: (body: { alchemy_api_key?: string | null }) =>
+    apiNoProfile<{ alchemy_api_key: boolean }>('/settings/api-keys', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+};
+
 export const profiles = {
   list: () => apiNoProfile<ProfileSummary[]>('/profiles'),
   create: (name: string) =>

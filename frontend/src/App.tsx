@@ -9,6 +9,7 @@ import AddAccount from './pages/AddAccount'
 import Profiles from './pages/Profiles'
 import UnlockScreen from './pages/UnlockScreen'
 import { unlockApi } from './api'
+import Settings from './pages/Settings'
 
 export default function App() {
   const [unlockChecked, setUnlockChecked] = useState(false)
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="accounts" element={<Accounts />} />
         <Route path="accounts/add" element={<AddAccount />} />
         <Route path="profiles" element={<Profiles />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

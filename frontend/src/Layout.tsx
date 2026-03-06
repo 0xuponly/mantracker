@@ -11,6 +11,7 @@ export default function Layout() {
         <nav>
           <NavLink to="/" end>Dashboard</NavLink>
           <NavLink to="/accounts">Accounts</NavLink>
+          <NavLink to="/settings">Settings</NavLink>
           <span className="profile-name">{currentProfile?.name}</span>
           <NavLink to="/profiles" className="nav-link">Manage profiles</NavLink>
         </nav>
