@@ -62,6 +62,9 @@ SOLANA_SOL_MINT = "So11111111111111111111111111111111111111112"
 COINGECKO_HYPE_URL = "https://api.coingecko.com/api/v3/simple/price?ids=hyperliquid&vs_currencies=usd"
 DIA_HYPE_URL = "https://api.diadata.org/v1/assetQuotation/Hyperliquid/0x0d01dc56dcaaca66ad901c959b4011ec"
 
+# HyperCore: mainnet exchange/L1 (not EVM). Info API for balances.
+HYPERLIQUID_INFO_URL = "https://api.hyperliquid.xyz/info"
+
 _hype_price_cache: tuple[float, float] | None = None  # (price, fetched_at)
 _HYPE_PRICE_TTL = 60.0  # seconds
 
@@ -313,6 +316,137 @@ async def fetch_btc_balance(address: str) -> AdapterResult:
     return AdapterResult(
         balances=[BalanceItem(asset="BTC", amount=btc, currency="BTC", raw_name=address[:16] + "...")]
     )
+
+
+async def fetch_hypercore_balance(address: str) -> AdapterResult:
+    """
+    Fetch balances on HyperCore (Hyperliquid mainnet exchange/L1), not HyperEVM.
+    Queries the main account via clearinghouseState and spotClearinghouseState (same address);
+    then adds any sub-account balances from subAccounts so all activity is visible.
+    """
+    total_withdrawable = 0.0
+    coin_totals: dict[str, float] = {}
+    try:
+        async with httpx.AsyncClient() as client:
+            # Main account: clearinghouseState (withdrawable, margin) and spotClearinghouseState (spot balances)
+            for req_type in ("clearinghouseState", "spotClearinghouseState"):
+                try:
+                    r = await client.post(
+                        HYPERLIQUID_INFO_URL,
+                        json={"type": req_type, "user": address},
+                        timeout=12.0,
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                except Exception:
+                    continue
+                if req_type == "clearinghouseState" and isinstance(data, dict):
+                    w = data.get("withdrawable")
+                    if w is not None:
+                        try:
+                            total_withdrawable += float(w)
+                        except (TypeError, ValueError):
+                            pass
+                elif req_type == "spotClearinghouseState":
+                    # Response can be dict with "balances" or direct list of balances
+                    if isinstance(data, dict):
+                        bal_list = data.get("balances") or data.get("balance") or []
+                    elif isinstance(data, list):
+                        bal_list = data
+                    else:
+                        bal_list = []
+                    for b in bal_list:
+                        if not isinstance(b, dict):
+                            continue
+                        coin = (b.get("coin") or "").strip()
+                        if not coin:
+                            continue
+                        total = b.get("total")
+                        if total is None:
+                            continue
+                        try:
+                            coin_totals[coin] = coin_totals.get(coin, 0) + float(total)
+                        except (TypeError, ValueError):
+                            pass
+
+            # Sub-accounts: aggregate so we show full picture if user also uses sub-accounts
+            try:
+                r2 = await client.post(
+                    HYPERLIQUID_INFO_URL,
+                    json={"type": "subAccounts", "user": address},
+                    timeout=12.0,
+                )
+                r2.raise_for_status()
+                sub_data = r2.json()
+            except Exception:
+                sub_data = []
+            if isinstance(sub_data, list):
+                for item in sub_data:
+                    if not isinstance(item, dict):
+                        continue
+                    ch = item.get("clearinghouseState") or {}
+                    if isinstance(ch, dict):
+                        w = ch.get("withdrawable")
+                        if w is not None:
+                            try:
+                                total_withdrawable += float(w)
+                            except (TypeError, ValueError):
+                                pass
+                    spot = item.get("spotState") or {}
+                    for b in spot.get("balances") or []:
+                        if not isinstance(b, dict):
+                            continue
+                        coin = (b.get("coin") or "").strip()
+                        if not coin:
+                            continue
+                        total = b.get("total")
+                        if total is None:
+                            continue
+                        try:
+                            coin_totals[coin] = coin_totals.get(coin, 0) + float(total)
+                        except (TypeError, ValueError):
+                            pass
+    except Exception as e:
+        return AdapterResult(balances=[], error=str(e))
+
+    balances: list[BalanceItem] = []
+    hype_price: float | None = None
+    try:
+        async with httpx.AsyncClient() as client:
+            hype_price = await _fetch_hype_usd_price(client)
+    except Exception:
+        pass
+
+    for coin, amount in coin_totals.items():
+        if amount <= 0:
+            continue
+        usd_value = None
+        if coin == "USDC":
+            usd_value = amount
+        elif coin == "HYPE" and hype_price is not None:
+            usd_value = amount * hype_price
+        balances.append(
+            BalanceItem(
+                asset=coin,
+                amount=amount,
+                currency=coin,
+                usd_value=usd_value,
+                raw_name=coin,
+            )
+        )
+
+    if total_withdrawable > 0:
+        balances.append(
+            BalanceItem(
+                asset="Account value",
+                amount=total_withdrawable,
+                currency="USD",
+                usd_value=total_withdrawable,
+                raw_name="Withdrawable (USD)",
+            )
+        )
+
+    return AdapterResult(balances=balances)
 
 
 async def _fetch_hype_usd_price(client: httpx.AsyncClient) -> float | None:
@@ -628,6 +762,26 @@ async def fetch_evm_all_chains(address: str) -> AdapterResult:
                     chain=chain_label,
                 )
             )
+
+    # Also include HyperCore balances for all EVM addresses (Hyperliquid mainnet / exchange)
+    try:
+        hypercore_result = await fetch_hypercore_balance(address)
+        if hypercore_result.balances:
+            for b in hypercore_result.balances:
+                merged.append(
+                    BalanceItem(
+                        asset=b.asset,
+                        amount=b.amount,
+                        currency=b.currency,
+                        usd_value=b.usd_value,
+                        raw_name=b.raw_name,
+                        chain=CHAIN_DISPLAY_NAMES.get("hypercore", "HyperCore"),
+                    )
+                )
+        if hypercore_result.error and not hypercore_result.balances:
+            errors.append(f"{CHAIN_DISPLAY_NAMES.get('hypercore', 'HyperCore')}: {hypercore_result.error}")
+    except Exception as e:
+        errors.append(f"{CHAIN_DISPLAY_NAMES.get('hypercore', 'HyperCore')}: {e!s}")
     return AdapterResult(
         balances=merged,
         error="; ".join(errors) if errors else None,
@@ -807,7 +961,10 @@ async def fetch_wallet_balances(provider: str, credential_payload: dict) -> Adap
         return await fetch_btc_balance(address)
     if provider_lower == "solana" or provider_lower == "sol":
         return await fetch_solana_balance(address)
-    # EVM: one chain or all chains
+    # HyperCore: mainnet exchange (L1), not HyperEVM – use info API
+    if provider_lower == "hypercore":
+        return await fetch_hypercore_balance(address)
+    # EVM: one chain or all chains (HyperEVM is one of these)
     if provider_lower in ("evm", "evm-all", "evm_all"):
         return await fetch_evm_all_chains(address)
     chain = provider_lower or "ethereum"
