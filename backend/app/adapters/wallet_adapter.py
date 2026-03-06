@@ -65,6 +65,168 @@ DIA_HYPE_URL = "https://api.diadata.org/v1/assetQuotation/Hyperliquid/0x0d01dc56
 _hype_price_cache: tuple[float, float] | None = None  # (price, fetched_at)
 _HYPE_PRICE_TTL = 60.0  # seconds
 
+# Alchemy Prices API + DefiLlama + CoinGecko for ERC-20 USD pricing
+ALCHEMY_PRICES_NETWORK = {
+    "ethereum": "eth-mainnet",
+    "arbitrum": "arbitrum-mainnet",
+}
+DEFILLAMA_COINS_URL = "https://coins.llama.fi/prices/current"
+DEFILLAMA_CHAIN_IDS = {
+    "ethereum": "ethereum",
+    "arbitrum": "arbitrum",
+    "polygon": "polygon",
+    "optimism": "optimism",
+    "base": "base",
+}
+COINGECKO_TOKEN_PRICE_URL = "https://api.coingecko.com/api/v3/simple/token_price"
+COINGECKO_PLATFORM_IDS = {
+    "ethereum": "ethereum",
+    "arbitrum": "arbitrum-one",
+    "polygon": "polygon-pos",
+    "optimism": "optimistic-ethereum",
+    "base": "base",
+}
+
+# Known ERC-20s per chain (contract, symbol, decimals) – fetched via eth_call when Alchemy omits them
+KNOWN_EVM_TOKENS: dict[str, list[tuple[str, str, int]]] = {
+    "arbitrum": [
+        ("0xaf88d065e77c8cc2239327c5edb3a432268e5831", "USDC", 6),
+        ("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8", "USDC.e", 6),
+        ("0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "USDT", 6),
+    ],
+}
+
+# Native token CoinGecko ids for EVM chains (ETH, MATIC, etc.)
+EVM_NATIVE_COINGECKO_IDS: dict[str, str] = {
+    "ethereum": "ethereum",
+    "arbitrum": "ethereum",
+    "optimism": "ethereum",
+    "base": "ethereum",
+    "polygon": "matic-network",
+    "avalanche": "avalanche-2",
+    "bsc": "binancecoin",
+}
+COINGECKO_SIMPLE_PRICE_URL = "https://api.coingecko.com/api/v3/simple/price"
+_evm_native_price_cache: dict[str, tuple[float, float]] = {}  # cg_id -> (price, fetched_at)
+_EVM_NATIVE_PRICE_TTL = 60.0
+
+
+async def _fetch_evm_native_usd_price(chain: str, client: httpx.AsyncClient) -> float | None:
+    """USD price for chain native token (ETH, MATIC, etc.). HYPE uses existing fetcher."""
+    chain_lower = chain.lower()
+    if chain_lower in ("hyperevm", "hypercore"):
+        return await _fetch_hype_usd_price(client)
+    cg_id = EVM_NATIVE_COINGECKO_IDS.get(chain_lower)
+    if not cg_id:
+        return None
+    now = asyncio.get_running_loop().time()
+    cached = _evm_native_price_cache.get(cg_id)
+    if cached and (now - cached[1]) < _EVM_NATIVE_PRICE_TTL:
+        return cached[0]
+    try:
+        r = await client.get(f"{COINGECKO_SIMPLE_PRICE_URL}?ids={cg_id}&vs_currencies=usd", timeout=6.0)
+        r.raise_for_status()
+        data = r.json() or {}
+        price = float((data.get(cg_id) or {}).get("usd") or 0)
+        if price > 0:
+            _evm_native_price_cache[cg_id] = (price, now)
+            return price
+    except Exception:
+        pass
+    return None
+
+
+async def _fetch_erc20_usd_prices_alchemy(chain: str, contracts: list[str]) -> dict[str, float]:
+    """
+    Fetch USD prices for ERC-20 contracts: Alchemy Prices API, then DefiLlama, then CoinGecko.
+    Returns mapping contract_address_lower -> price. Fallbacks run even when Alchemy key is missing.
+    """
+    if not contracts:
+        return {}
+    chain_lower = chain.lower()
+    norm_contracts = sorted({(c or "").strip().lower() for c in contracts if c})
+    if not norm_contracts:
+        return {}
+    out: dict[str, float] = {}
+    try:
+        async with httpx.AsyncClient() as client:
+            # Primary: Alchemy Prices API (only when key and network available)
+            key = (get_settings().alchemy_api_key or "").strip()
+            network = ALCHEMY_PRICES_NETWORK.get(chain_lower)
+            if key and network:
+                try:
+                    body = {"addresses": [{"network": network, "address": addr} for addr in norm_contracts]}
+                    r = await client.post(
+                        f"https://api.g.alchemy.com/prices/v1/{key}/tokens/by-address",
+                        json=body,
+                        timeout=8.0,
+                    )
+                    r.raise_for_status()
+                    data = r.json() or {}
+                    for entry in data.get("data", []):
+                        try:
+                            if entry.get("error"):
+                                continue
+                            addr = (entry.get("address") or "").lower()
+                            for p in entry.get("prices") or []:
+                                if p.get("currency") == "USD":
+                                    v = float(p.get("value") or 0)
+                                    if addr and v > 0:
+                                        out[addr] = v
+                                    break
+                        except (TypeError, ValueError):
+                            continue
+                except Exception:
+                    pass
+
+            # First fallback: DefiLlama
+            missing = [c for c in norm_contracts if c not in out]
+            llama_chain = DEFILLAMA_CHAIN_IDS.get(chain_lower)
+            if missing and llama_chain:
+                try:
+                    coins_param = ",".join(f"{llama_chain}:{a}" for a in missing)
+                    r2 = await client.get(f"{DEFILLAMA_COINS_URL}/{coins_param}", timeout=8.0)
+                    r2.raise_for_status()
+                    coins = (r2.json() or {}).get("coins") or {}
+                    for key_str, info in coins.items():
+                        try:
+                            parts = key_str.split(":", 1)
+                            if len(parts) != 2:
+                                continue
+                            addr = parts[1].lower()
+                            price = float(info.get("price") or 0)
+                            if addr and price > 0:
+                                out.setdefault(addr, price)
+                        except (TypeError, ValueError):
+                            continue
+                except Exception:
+                    pass
+
+            # Second fallback: CoinGecko token price by contract
+            missing2 = [c for c in norm_contracts if c not in out]
+            platform = COINGECKO_PLATFORM_IDS.get(chain_lower)
+            if missing2 and platform:
+                try:
+                    addrs = ",".join(missing2)
+                    r3 = await client.get(
+                        f"{COINGECKO_TOKEN_PRICE_URL}/{platform}?contract_addresses={addrs}&vs_currencies=usd",
+                        timeout=8.0,
+                    )
+                    r3.raise_for_status()
+                    data3 = r3.json() or {}
+                    for addr, obj in data3.items():
+                        try:
+                            v = float((obj or {}).get("usd") or 0)
+                            if v > 0:
+                                out.setdefault(addr.lower(), v)
+                        except (TypeError, ValueError):
+                            continue
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return out
+
 # Rate-limit Solana public RPC: one request at a time, delay between calls, retry on 429.
 # Keep the lock scope tight (only around the HTTP request + short pacing) so 429 backoffs
 # don't block unrelated calls and cause cascading timeouts.
@@ -190,6 +352,71 @@ async def _fetch_hype_usd_price(client: httpx.AsyncClient) -> float | None:
     return None
 
 
+def _erc20_balance_of_calldata(owner: str) -> str:
+    """ERC-20 balanceOf(address) calldata: selector + padded address."""
+    owner = (owner or "").strip().lower()
+    if not owner.startswith("0x"):
+        owner = "0x" + owner
+    return "0x70a08231" + owner[2:].zfill(64)
+
+
+async def _fetch_evm_known_token_balances(
+    chain: str, address: str, rpc_url: str | None
+) -> list[tuple[str, BalanceItem]]:
+    """Fetch balances for known tokens (e.g. USDC on Arbitrum) via eth_call. Returns (contract_lower, BalanceItem)."""
+    chain_lower = chain.lower()
+    tokens = KNOWN_EVM_TOKENS.get(chain_lower)
+    if not tokens:
+        return []
+    url = rpc_url or DEFAULT_RPC.get(chain_lower, DEFAULT_RPC["ethereum"])
+    data_hex = _erc20_balance_of_calldata(address)
+    out: list[tuple[str, BalanceItem]] = []
+    try:
+        async with httpx.AsyncClient() as client:
+            for contract, symbol, decimals in tokens:
+                try:
+                    r = await client.post(
+                        url,
+                        json={
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "eth_call",
+                            "params": [{"to": contract, "data": data_hex}, "latest"],
+                        },
+                        timeout=10.0,
+                    )
+                    r.raise_for_status()
+                    j = r.json()
+                    if j.get("error"):
+                        continue
+                    raw = (j.get("result") or "0x0").strip()
+                    if not raw or raw == "0x":
+                        continue
+                    value = int(raw, 16)
+                    if value <= 0:
+                        continue
+                    amount = value / (10**decimals)
+                    if amount <= 0:
+                        continue
+                    out.append(
+                        (
+                            contract.lower(),
+                            BalanceItem(
+                                asset=symbol,
+                                amount=amount,
+                                currency=symbol,
+                                usd_value=None,
+                                raw_name=symbol,
+                            ),
+                        )
+                    )
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return out
+
+
 def _evm_native_symbol(chain: str) -> str:
     c = chain.lower()
     if c in ("ethereum", "arbitrum", "optimism", "base"):
@@ -206,7 +433,7 @@ def _evm_native_symbol(chain: str) -> str:
 
 
 async def fetch_evm_balances_alchemy(chain: str, address: str) -> AdapterResult:
-    """Fetch ERC-20 token balances via Alchemy's Token API. Native token handled separately."""
+    """Fetch ERC-20 token balances via Alchemy's Token API, and enrich with USD prices via Alchemy Prices API when available."""
     settings = get_settings()
     key = (settings.alchemy_api_key or "").strip()
     if not key:
@@ -231,13 +458,16 @@ async def fetch_evm_balances_alchemy(chain: str, address: str) -> AdapterResult:
 
     result = data.get("result") or {}
     tokens = result.get("tokenBalances") or []
-    balances: list[BalanceItem] = []
+
+    # Collect non-zero balances and their contracts so we can price them.
+    items: list[tuple[str, float]] = []  # (contract_address_lower, amount)
+    symbols: dict[str, str] = {}         # contract_address_lower -> display symbol (truncated address)
     for t in tokens:
         try:
             raw = t.get("tokenBalance")
             if not raw:
                 continue
-            # Alchemy returns hex (e.g. \"0x123...\") or decimal string
+            # Alchemy returns hex (e.g. "0x123...") or decimal string
             if isinstance(raw, str) and raw.startswith("0x"):
                 value = int(raw, 16)
             else:
@@ -248,67 +478,27 @@ async def fetch_evm_balances_alchemy(chain: str, address: str) -> AdapterResult:
             amount = value / 10**18
             if amount <= 0:
                 continue
-            contract_address = (t.get("contractAddress") or "")[:12] + "…" if t.get("contractAddress") else "token"
-            symbol = contract_address
-            balances.append(
-                BalanceItem(
-                    asset=symbol,
-                    amount=amount,
-                    currency=symbol,
-                    usd_value=None,
-                    raw_name=address[:16] + "...",
-                )
-            )
+            contract = (t.get("contractAddress") or "").lower()
+            if not contract:
+                continue
+            items.append((contract, amount))
+            if contract not in symbols:
+                symbols[contract] = (t.get("contractAddress") or "")[:12] + "…"
         except (ValueError, TypeError):
             continue
-    return AdapterResult(balances=balances)
 
+    if not items:
+        return AdapterResult(balances=[])
 
-async def fetch_evm_balance(chain: str, address: str, rpc_url: str | None = None) -> AdapterResult:
-    """Fetch token balances via Alchemy when key set; else native-only."""
-    chain_lower = chain.lower()
-    settings = get_settings()
-    alchemy_key = (settings.alchemy_api_key or "").strip()
+    # Try to get USD prices for these ERC-20s from Alchemy Prices API.
+    prices = await _fetch_erc20_usd_prices_alchemy(chain, [c for (c, _) in items])
 
-    # Prefer Alchemy where available
-    if alchemy_key and chain_lower in ALCHEMY_NETWORK:
-        result = await fetch_evm_balances_alchemy(chain, address)
-        if result.balances:
-            return result
-
-    # Native-only fallback
-    url = rpc_url or DEFAULT_RPC.get(chain_lower, DEFAULT_RPC["ethereum"])
-    payload = {
-        "jsonrpc": "2.0",
-        "method": "eth_getBalance",
-        "params": [address, "latest"],
-        "id": 1,
-    }
-    try:
-        async with httpx.AsyncClient() as client:
-            r = await client.post(url, json=payload, timeout=15.0)
-            r.raise_for_status()
-            data = r.json()
-    except Exception as e:
-        return AdapterResult(balances=[], error=str(e))
-
-    hex_balance = data.get("result", "0x0")
-    wei = int(hex_balance, 16)
-    amount = wei / 10**18
-    symbol = _evm_native_symbol(chain)
-
-    usd_value = None
-    # Price HYPE on HyperEVM via public price APIs.
-    if chain_lower == "hyperevm" and amount > 0:
-        try:
-            async with httpx.AsyncClient() as client:
-                price = await _fetch_hype_usd_price(client)
-            if price is not None:
-                usd_value = amount * price
-        except Exception:
-            usd_value = None
-    return AdapterResult(
-        balances=[
+    balances: list[BalanceItem] = []
+    for contract, amount in items:
+        symbol = symbols.get(contract) or (contract[:10] + "…")
+        usd_price = prices.get(contract)
+        usd_value = amount * usd_price if usd_price is not None else None
+        balances.append(
             BalanceItem(
                 asset=symbol,
                 amount=amount,
@@ -316,8 +506,90 @@ async def fetch_evm_balance(chain: str, address: str, rpc_url: str | None = None
                 usd_value=usd_value,
                 raw_name=address[:16] + "...",
             )
-        ]
+        )
+    return AdapterResult(balances=balances)
+
+
+async def _fetch_evm_native_balance(chain: str, address: str, rpc_url: str | None) -> BalanceItem | None:
+    """Fetch native token balance (ETH, HYPE, etc.) and its USD value when possible."""
+    chain_lower = chain.lower()
+    url = rpc_url or DEFAULT_RPC.get(chain_lower, DEFAULT_RPC["ethereum"])
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.post(
+                url,
+                json={"jsonrpc": "2.0", "method": "eth_getBalance", "params": [address, "latest"], "id": 1},
+                timeout=15.0,
+            )
+            r.raise_for_status()
+            data = r.json()
+    except Exception:
+        return None
+    try:
+        wei = int(data.get("result", "0x0"), 16)
+    except (ValueError, TypeError):
+        return None
+    amount = wei / 10**18
+    symbol = _evm_native_symbol(chain)
+    usd_value = None
+    if amount > 0:
+        try:
+            async with httpx.AsyncClient() as client:
+                price = await _fetch_evm_native_usd_price(chain, client)
+            if price is not None:
+                usd_value = amount * price
+        except Exception:
+            pass
+    return BalanceItem(
+        asset=symbol,
+        amount=amount,
+        currency=symbol,
+        usd_value=usd_value,
+        raw_name=address[:16] + "...",
     )
+
+
+async def fetch_evm_balance(chain: str, address: str, rpc_url: str | None = None) -> AdapterResult:
+    """Fetch native + ERC-20 balances. Alchemy for tokens when key set; always include native with USD price."""
+    chain_lower = chain.lower()
+    native = await _fetch_evm_native_balance(chain, address, rpc_url)
+
+    combined: list[BalanceItem] = []
+    if native is not None:
+        combined.append(native)
+
+    if (get_settings().alchemy_api_key or "").strip() and chain_lower in ALCHEMY_NETWORK:
+        result = await fetch_evm_balances_alchemy(chain, address)
+        combined.extend(result.balances)
+
+    # Merge in known tokens (e.g. USDC on Arbitrum) so they always show when Alchemy omits or misreports them
+    existing_assets = {b.asset.upper() for b in combined}
+    if chain_lower in KNOWN_EVM_TOKENS:
+        known_list = await _fetch_evm_known_token_balances(chain, address, rpc_url)
+        if known_list:
+            contracts = [c for c, _ in known_list]
+            prices = await _fetch_erc20_usd_prices_alchemy(chain, contracts)
+            for contract, b in known_list:
+                if b.asset.upper() in existing_assets:
+                    continue
+                existing_assets.add(b.asset.upper())
+                p = prices.get(contract)
+                usd_value = (b.amount * p) if p else None
+                combined.append(
+                    BalanceItem(
+                        asset=b.asset,
+                        amount=b.amount,
+                        currency=b.currency,
+                        usd_value=usd_value,
+                        raw_name=b.raw_name,
+                    )
+                )
+
+    if combined:
+        return AdapterResult(balances=combined)
+    if native is not None:
+        return AdapterResult(balances=[native])
+    return AdapterResult(balances=[], error="Failed to fetch balance")
 
 
 async def fetch_evm_all_chains(address: str) -> AdapterResult:
