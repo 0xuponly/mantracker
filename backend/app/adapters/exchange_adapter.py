@@ -21,6 +21,27 @@ async def _get_ccxt():
             return None, False
 
 
+async def _ensure_markets(exchange: Any, is_async: bool) -> dict[str, Any] | None:
+    """
+    Make sure exchange.markets is populated (load_markets) so we can map
+    tickers to base/quote pairs reliably across exchanges (e.g. Bybit).
+    """
+    markets = getattr(exchange, "markets", None)
+    if markets:
+        return markets
+    load_markets = getattr(exchange, "load_markets", None)
+    if not load_markets:
+        return None
+    try:
+        if is_async:
+            markets = await load_markets()
+        else:
+            markets = await asyncio.to_thread(load_markets)
+    except Exception:
+        return None
+    return markets
+
+
 def _price_from_ticker(ticker: dict[str, Any]) -> float | None:
     """Extract last price from a CCXT ticker dict."""
     if not ticker:
@@ -47,6 +68,10 @@ async def _fetch_usd_prices(exchange: Any, currencies: list[str], is_async: bool
     """
     if not currencies:
         return {}
+
+    # Ensure markets are loaded so we can resolve base/quote properly.
+    markets = await _ensure_markets(exchange, is_async)
+
     try:
         if is_async:
             tickers = await exchange.fetch_tickers()
@@ -56,16 +81,57 @@ async def _fetch_usd_prices(exchange: Any, currencies: list[str], is_async: bool
         return {}
     if not tickers:
         return {}
+
     quote_order = ("USDT", "USD", "BUSD")
     result: dict[str, float] = {}
+
     for currency in currencies:
         for quote in quote_order:
-            symbol = f"{currency}/{quote}"
-            ticker = tickers.get(symbol) if isinstance(tickers, dict) else None
-            price = _price_from_ticker(ticker) if ticker else None
-            if price is not None and price > 0:
-                result[currency] = price
+            # Candidate symbols, ordered by preference.
+            symbols: list[str] = []
+
+            # Use markets metadata when available (handles Bybit-style symbols like "S/USDT:USDT").
+            if isinstance(markets, dict):
+                for m in markets.values():
+                    base = m.get("base")
+                    q = m.get("quote")
+                    if base == currency and q == quote:
+                        sym = m.get("symbol")
+                        if isinstance(sym, str):
+                            symbols.append(sym)
+
+            # Fallback guesses for exchanges without detailed markets metadata.
+            symbols.extend(
+                [
+                    f"{currency}/{quote}",
+                    f"{currency}/{quote}:{quote}",
+                    f"{currency}{quote}",
+                ]
+            )
+
+            for sym in symbols:
+                ticker = tickers.get(sym) if isinstance(tickers, dict) else None
+                if ticker is None:
+                    # As a last resort, try fetching a single ticker for that symbol.
+                    try:
+                        if is_async:
+                            ticker = await exchange.fetch_ticker(sym)
+                        else:
+                            ticker = await asyncio.to_thread(exchange.fetch_ticker, sym)
+                        # If that worked, optionally cache it back into tickers dict.
+                        if isinstance(tickers, dict):
+                            tickers[sym] = ticker
+                    except Exception:
+                        ticker = None
+
+                price = _price_from_ticker(ticker) if ticker else None
+                if price is not None and price > 0:
+                    result[currency] = price
+                    break
+
+            if currency in result:
                 break
+
     return result
 
 
@@ -113,27 +179,22 @@ async def fetch_exchange_balances(provider: str, credential_payload: dict) -> Ad
                 amount = float(data) if data else 0
                 if amount <= 0:
                     continue
-                usd = None
-                if currency in ("USDT", "USDC", "BUSD"):
-                    usd = amount
-                elif "USD" in currency:
-                    usd = amount
                 balances.append(
                     BalanceItem(
                         asset=currency,
                         amount=amount,
                         currency=currency,
-                        usd_value=usd,
+                        usd_value=None,
                     )
                 )
-            # Resolve USD value for non-USD tokens (e.g. S, HYPE on Bybit) via exchange tickers
-            need_price = [b.asset for b in balances if b.usd_value is None]
+            # Resolve USD value for all assets (including stablecoins) via exchange tickers
+            need_price = [b.asset for b in balances]
             if need_price:
                 prices = await _fetch_usd_prices(exchange, need_price, is_async)
                 if prices:
                     new_balances = []
                     for b in balances:
-                        if b.usd_value is None and b.asset in prices:
+                        if b.asset in prices:
                             new_balances.append(
                                 BalanceItem(
                                     asset=b.asset,
