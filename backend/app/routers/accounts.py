@@ -50,6 +50,10 @@ class AccountBalancesResponse(BaseModel):
     error: str | None = None
 
 
+class AccountUpdate(BaseModel):
+    name: str | None = None
+
+
 @router.get("", response_model=list[AccountResponse])
 async def list_accounts(
     db: AsyncSession = Depends(get_db),
@@ -136,6 +140,34 @@ async def create_account(
     )
     db.add(cred)
     await db.flush()
+    return AccountResponse(
+        id=account.id,
+        name=account.name,
+        type=account.type.value,
+        provider=account.provider,
+        is_active=account.is_active,
+    )
+
+
+@router.patch("/{account_id}", response_model=AccountResponse)
+async def update_account(
+    account_id: int,
+    body: AccountUpdate,
+    db: AsyncSession = Depends(get_db),
+    profile: Profile = Depends(get_current_profile),
+):
+    q = select(Account).where(Account.id == account_id, Account.profile_id == profile.id)
+    r = await db.execute(q)
+    account = r.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Account name cannot be empty")
+        account.name = name
+
     return AccountResponse(
         id=account.id,
         name=account.name,

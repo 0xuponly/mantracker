@@ -30,6 +30,26 @@
   color: var(--text-muted);
 }
 
+.account-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.account-row input[type="text"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.account-row input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .btn-danger {
   background: transparent;
   border: 1px solid var(--error);

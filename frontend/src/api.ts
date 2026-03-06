@@ -148,6 +148,11 @@ export const accounts = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  update: (id: number, body: { name?: string }) =>
+    api<AccountSummary>(`/accounts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   delete: (id: number) =>
     api<{ ok: boolean }>(`/accounts/${id}`, { method: 'DELETE' }),
 };
