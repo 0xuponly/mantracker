@@ -1,0 +1,46 @@
+.accounts-page .muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: -0.5rem 0 1rem;
+}
+
+.accounts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+}
+
+.account-row strong {
+  display: block;
+}
+
+.account-row .meta {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid var(--error);
+  color: var(--error);
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.btn-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+}
+.btn-danger:disabled {
+  opacity: 0.6;
+}

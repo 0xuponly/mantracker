@@ -1,0 +1,76 @@
+.layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--text);
+}
+.logo:hover {
+  color: var(--accent);
+}
+
+.header nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.header nav a {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.header nav a:hover,
+.header nav a.active {
+  color: var(--text);
+}
+
+.profile-name {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.nav-link {
+  font-size: 0.9rem;
+}
+
+.btn-logout {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+.btn-logout:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.main {
+  flex: 1;
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: var(--text-muted);
+}

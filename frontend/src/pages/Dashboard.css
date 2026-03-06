@@ -1,0 +1,236 @@
+.dashboard {
+  padding-bottom: 2rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.toggle-low-balance {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-low-balance input {
+  cursor: pointer;
+}
+.toggle-low-balance span {
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  text-decoration: none;
+  display: inline-block;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.page-loading,
+.page-error {
+  color: var(--text-muted);
+}
+.page-error {
+  color: var(--error);
+}
+
+.empty-state {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+.empty-state p {
+  margin: 0 0 1rem;
+}
+.empty-state .btn-primary {
+  margin-top: 0.5rem;
+}
+
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+  gap: 1rem;
+}
+
+.account-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  transition: border-color 0.15s;
+}
+.account-card:hover {
+  border-color: var(--text-muted);
+}
+
+.account-card-header {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  align-items: center;
+}
+
+.account-card-header-spacer {
+  flex: 1;
+}
+
+.account-type {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.account-provider {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.account-updating {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.account-refresh-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+.account-refresh-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+.account-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.account-card h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.account-error {
+  color: var(--error);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.account-loading {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.balance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.balance-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4rem minmax(6rem, auto) minmax(5rem, auto) minmax(5.5rem, auto);
+  gap: 1rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.balance-list li:last-child {
+  border-bottom: none;
+}
+
+.balance-list .asset {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.balance-list .ticker {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.balance-list .amount {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.balance-list .unit-price {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.balance-list .usd {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.card-usd-total {
+  margin: 0.75rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+  color: var(--success);
+}
+
+.total-bar {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.total-bar span {
+  color: var(--text-muted);
+}
+.total-bar strong {
+  font-size: 1.25rem;
+  color: var(--success);
+}

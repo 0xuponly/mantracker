@@ -1,0 +1,122 @@
+.profiles-page .muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: -0.25rem 0 1rem;
+}
+
+.profiles-page .muted.small {
+  margin-bottom: 0.5rem;
+}
+
+.error-banner {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--error);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+
+.section {
+  margin-bottom: 1.5rem;
+}
+
+.profiles-page .page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.section h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem;
+}
+
+.inline-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.inline-form input {
+  flex: 1;
+  min-width: 160px;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.btn-secondary {
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+.profiles-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+}
+
+.profile-row .badge {
+  font-size: 0.75rem;
+  color: var(--accent);
+  margin-left: 0.5rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.profile-row .btn-danger {
+  background: transparent;
+  border: 1px solid var(--error);
+  color: var(--error);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.profile-row .btn-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+}

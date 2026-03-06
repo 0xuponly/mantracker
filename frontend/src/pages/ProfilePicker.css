@@ -1,0 +1,98 @@
+.profile-picker {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.profile-picker-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+}
+
+.profile-picker-card h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+}
+
+.label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.profile-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.profile-list li {
+  margin-bottom: 0.5rem;
+}
+
+.profile-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-btn:hover {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.create-form input {
+  padding: 0.6rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.create-form .error {
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+.create-form button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.65rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.create-form button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.create-form button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}

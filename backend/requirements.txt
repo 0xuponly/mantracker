@@ -1,0 +1,27 @@
+# Core
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+aiosqlite==0.20.0
+greenlet>=3.0.0
+
+# Security & encryption
+cryptography==43.0.3
+
+# Plaid (banks & brokerage)
+plaid-python>=38.0.0
+
+# Crypto exchanges
+# Pin ccxt to a version that does not require optional static_dependencies modules
+# which are missing in some installs of the latest release.
+ccxt==4.4.1
+
+# Blockchain: we use public RPCs (mempool.space, eth_getBalance, Solana RPC) via httpx only
+
+# HTTP
+httpx==0.28.0
+pydantic==2.10.2
+pydantic-settings==2.6.1

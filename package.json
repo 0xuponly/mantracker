@@ -1,0 +1,11 @@
+{
+  "name": "portfolio-tracker",
+  "private": true,
+  "description": "Portfolio tracker — backend + desktop frontend",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "backend": "cd backend && ./.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "frontend": "cd frontend && npm run electron:dev",
+    "check:secrets": "python3 backend/scripts/check_no_secrets_in_logs.py"
+  }
+}
