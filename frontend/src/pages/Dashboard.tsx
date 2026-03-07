@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [byAccountId, setByAccountId] = useState<Record<number, BalanceState>>({})
   const [accountsError, setAccountsError] = useState('')
   const [hideLowBalance, setHideLowBalance] = useState(true)
+  const [balancesVisible, setBalancesVisible] = useState(true)
   const byAccountRef = useRef<Record<number, BalanceState>>({})
   const retryCountRef = useRef<Map<number, number>>(new Map())
   const retryTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
@@ -343,14 +344,52 @@ export default function Dashboard() {
       <div className="page-header">
         <h1>Portfolio</h1>
         <div className="page-header-actions">
-          <label className="toggle-low-balance">
-            <input
-              type="checkbox"
-              checked={hideLowBalance}
-              onChange={(e) => setHideLowBalance(e.target.checked)}
-            />
-            <span>Hide &lt;$1</span>
-          </label>
+          <button
+            type="button"
+            className="btn-secondary btn-icon"
+            onClick={() => setBalancesVisible((v) => !v)}
+            title={balancesVisible ? 'Hide amounts and totals' : 'Show amounts and totals'}
+            aria-label={balancesVisible ? 'Hide balances' : 'Show balances'}
+          >
+            {balancesVisible ? (
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l1.74 1.74c.57-.23 1.18-.36 1.83-.36zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/>
+              </svg>
+            )}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary btn-icon"
+            onClick={() => setHideLowBalance((v) => !v)}
+            title={hideLowBalance ? 'Show balances under $1' : 'Hide balances under $1'}
+            aria-label={hideLowBalance ? 'Show balances under $1' : 'Hide balances under $1'}
+            aria-pressed={hideLowBalance}
+          >
+            {hideLowBalance ? (
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                <circle fill="currentColor" cx="6" cy="8" r="2"/>
+                <circle fill="currentColor" cx="12" cy="6" r="1.5"/>
+                <circle fill="currentColor" cx="18" cy="10" r="2"/>
+                <circle fill="currentColor" cx="8" cy="14" r="1.5"/>
+                <circle fill="currentColor" cx="15" cy="16" r="2"/>
+                <circle fill="currentColor" cx="11" cy="12" r="1"/>
+                <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M3 3l18 18"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                <circle fill="currentColor" cx="6" cy="8" r="2"/>
+                <circle fill="currentColor" cx="12" cy="6" r="1.5"/>
+                <circle fill="currentColor" cx="18" cy="10" r="2"/>
+                <circle fill="currentColor" cx="8" cy="14" r="1.5"/>
+                <circle fill="currentColor" cx="15" cy="16" r="2"/>
+                <circle fill="currentColor" cx="11" cy="12" r="1"/>
+              </svg>
+            )}
+          </button>
           <button type="button" className="btn-secondary" onClick={refreshAllBalances}>
             Refresh balances
           </button>
@@ -436,16 +475,18 @@ export default function Dashboard() {
                             </span>
                             <span className="ticker">{b.currency || b.asset}</span>
                             <span className="amount">
-                              {b.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                              {balancesVisible
+                                ? b.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })
+                                : '•••'}
                             </span>
                             <span className="unit-price">
                               {unitPrice != null ? `$${unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}` : '—'}
                             </span>
-                            {b.usd_value != null ? (
-                              <span className="usd">≈ ${b.usd_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                            ) : (
-                              <span className="usd muted">—</span>
-                            )}
+                            <span className={`usd ${balancesVisible && b.usd_value == null ? 'muted' : ''}`}>
+                              {balancesVisible
+                                ? (b.usd_value != null ? `≈ $${b.usd_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—')
+                                : '•••'}
+                            </span>
                           </li>
                         )
                       })}
@@ -454,7 +495,9 @@ export default function Dashboard() {
                 )}
                 {visibleBalances.length > 0 && (
                   <p className="card-usd-total">
-                    ≈ ${accountUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD
+                    {balancesVisible
+                      ? `≈ $${accountUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD`
+                      : '•••'}
                   </p>
                 )}
                 {state.balances.length > 0 && state.error && (
@@ -471,7 +514,7 @@ export default function Dashboard() {
       {hasAccounts && totalUsd > 0 && (
         <div className="total-bar">
           <span>Total (USD equivalent)</span>
-          <strong>${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong>
+          <strong>{balancesVisible ? `$${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '•••'}</strong>
         </div>
       )}
     </div>

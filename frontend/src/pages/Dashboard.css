@@ -20,6 +20,14 @@
   gap: 1rem;
 }
 
+.page-header-actions .btn-icon {
+  padding: 0.5rem;
+  line-height: 0;
+}
+.page-header-actions .btn-icon svg {
+  display: block;
+}
+
 .toggle-low-balance {
   display: flex;
   align-items: center;
