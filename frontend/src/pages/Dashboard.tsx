@@ -390,8 +390,19 @@ export default function Dashboard() {
               </svg>
             )}
           </button>
-          <button type="button" className="btn-secondary" onClick={refreshAllBalances}>
-            Refresh balances
+          <button
+            type="button"
+            className="btn-secondary btn-icon"
+            onClick={refreshAllBalances}
+            title="Refresh balances"
+            aria-label="Refresh balances"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+              <path
+                fill="currentColor"
+                d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 6h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L14 10h7V3l-3.35 3.35z"
+              />
+            </svg>
           </button>
           <Link to="/accounts/add" className="btn-primary">Add account</Link>
         </div>
