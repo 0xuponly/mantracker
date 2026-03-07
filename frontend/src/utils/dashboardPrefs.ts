@@ -1,3 +1,4 @@
+/** Persisted in localStorage (survives tab navigation and app restart). Key: mantracker_dashboard_prefs_<profileId> */
 const KEY_PREFIX = 'mantracker_dashboard_prefs_'
 
 export type DashboardPrefs = {

@@ -372,13 +372,21 @@ export default function Dashboard() {
   if (accountList === null) return <div className="page-loading">Loading accounts…</div>
 
   const hasAccounts = accountList.length > 0
-  let totalUsd = 0
-
   function accountTotalUsd(id: number): number {
     const st = byAccountId[id]
     if (!st || !st.balances) return 0
     return st.balances.reduce((s, b) => s + (b.usd_value ?? 0), 0)
   }
+  const visibleAccounts = hasAccounts
+    ? [...accountList]
+        .filter((acc) => !hiddenAccountIds.has(acc.id))
+        .sort((a, b) => {
+          const diff = accountTotalUsd(b.id) - accountTotalUsd(a.id)
+          if (diff !== 0) return diff
+          return a.name.localeCompare(b.name)
+        })
+    : []
+  const totalUsd = visibleAccounts.reduce((s, acc) => s + accountTotalUsd(acc.id), 0)
 
   return (
     <div className="dashboard">
@@ -493,6 +501,13 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {hasAccounts && totalUsd > 0 && (
+        <div className="total-bar">
+          <span>Total (USD equivalent)</span>
+          <strong>{balancesVisible ? `$${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '•••'}</strong>
+        </div>
+      )}
+
       {!hasAccounts ? (
         <div className="empty-state">
           <p>No accounts yet. Add exchange or wallet to see balances.</p>
@@ -500,14 +515,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="portfolio-grid">
-          {[...accountList]
-            .filter((acc) => !hiddenAccountIds.has(acc.id))
-            .sort((a, b) => {
-              const diff = accountTotalUsd(b.id) - accountTotalUsd(a.id)
-              if (diff !== 0) return diff
-              return a.name.localeCompare(b.name)
-            })
-            .map((acc) => {
+          {visibleAccounts.map((acc) => {
             const state = byAccountId[acc.id] ?? { balances: [], status: 'idle', error: null, fetchedAt: null }
             const hasCachedBalances = state.balances.length > 0
             const isLoading = state.status === 'loading' || state.status === 'idle'
@@ -521,7 +529,6 @@ export default function Dashboard() {
                 : state.balances
             ).filter((b) => Number(b.amount) > 0)
             const accountUsd = visibleBalances.reduce((s, b) => s + (b.usd_value ?? 0), 0)
-            totalUsd += accountUsd
             return (
               <div key={acc.id} className="account-card">
                 <div className="account-card-header">
@@ -605,13 +612,6 @@ export default function Dashboard() {
               </div>
             )
           })}
-        </div>
-      )}
-
-      {hasAccounts && totalUsd > 0 && (
-        <div className="total-bar">
-          <span>Total (USD equivalent)</span>
-          <strong>{balancesVisible ? `$${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '•••'}</strong>
         </div>
       )}
     </div>
