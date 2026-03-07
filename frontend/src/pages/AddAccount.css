@@ -28,6 +28,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  color: var(--text, #e8eaef);
 }
 .flow-card:hover {
   border-color: var(--accent);
@@ -39,11 +40,12 @@
 
 .flow-card strong {
   display: block;
+  color: var(--text, #e8eaef);
 }
 
 .flow-desc {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--text-muted, #a0a8b8);
 }
 
 .flow-form {
