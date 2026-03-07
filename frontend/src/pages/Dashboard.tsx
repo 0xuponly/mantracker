@@ -469,7 +469,7 @@ export default function Dashboard() {
 
       {!hasAccounts ? (
         <div className="empty-state">
-          <p>No accounts yet. Add bank, brokerage, exchange, or wallet to see balances.</p>
+          <p>No accounts yet. Add exchange or wallet to see balances.</p>
           <Link to="/accounts/add" className="btn-primary">Add your first account</Link>
         </div>
       ) : (

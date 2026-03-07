@@ -18,7 +18,7 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 class AccountCreate(BaseModel):
     name: str
-    type: str  # bank | brokerage | exchange | wallet
+    type: str  # exchange | wallet (bank/brokerage no longer supported)
     provider: str | None = None
     # Credentials: shape depends on type. Never logged.
     credentials: dict  # e.g. {"api_key":"","secret":""} or {"address":"0x..."}
@@ -125,7 +125,7 @@ async def create_account(
     if atype == AccountType.BANK or atype == AccountType.BROKERAGE:
         raise HTTPException(
             status_code=400,
-            detail="Use /plaid/exchange to link bank or brokerage accounts",
+            detail="Bank and brokerage accounts are no longer supported",
         )
     account = Account(
         profile_id=profile.id,

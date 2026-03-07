@@ -20,7 +20,7 @@ class Account(Base):
     profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)  # e.g. "Chase Checking"
     type: Mapped[AccountType] = mapped_column(Enum(AccountType), nullable=False)
-    # Optional provider id (e.g. "plaid", "binance", "ethereum", "bitcoin", "solana")
+    # Optional provider id (e.g. "binance", "ethereum", "bitcoin", "solana")
     provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -45,7 +45,7 @@ class AccountCredential(Base):
         unique=True,
         nullable=False,
     )
-    # Encrypted JSON: e.g. {"access_token": "..."} for Plaid, {"api_key":"","secret":""} for exchange, {"address": "0x..."} for wallet
+    # Encrypted JSON: e.g. {"api_key":"","secret":""} for exchange, {"address": "0x..."} for wallet
     encrypted_payload: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.db import init_db
-from app.routers import profiles, accounts, plaid, portfolio, unlock, settings
+from app.routers import profiles, accounts, portfolio, unlock, settings
 from app.security.crypto import AppLockedError, CredentialDecryptError
 
 
@@ -32,7 +32,6 @@ app.add_middleware(
 
 app.include_router(profiles.router)
 app.include_router(accounts.router)
-app.include_router(plaid.router)
 app.include_router(portfolio.router)
 app.include_router(unlock.router)
 app.include_router(settings.router)

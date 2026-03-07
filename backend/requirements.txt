@@ -11,9 +11,6 @@ greenlet>=3.0.0
 # Security & encryption
 cryptography==43.0.3
 
-# Plaid (banks & brokerage)
-plaid-python>=38.0.0
-
 # Crypto exchanges
 # Pin ccxt to a version that does not require optional static_dependencies modules
 # which are missing in some installs of the latest release.

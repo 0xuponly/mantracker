@@ -24,11 +24,6 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
-    # Optional: Plaid (banks/brokerage)
-    plaid_client_id: str | None = None
-    plaid_secret: str | None = None
-    plaid_env: str = "sandbox"  # sandbox | development | production
-
     # Optional: Alchemy (preferred EVM token balances provider when key is set)
     alchemy_api_key: str | None = None
 

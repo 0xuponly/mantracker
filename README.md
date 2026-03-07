@@ -1,10 +1,9 @@
-# Portfolio Tracker
+# Mantracker
 
-A comprehensive portfolio tracker that aggregates balances from **bank accounts** (via Plaid), **brokerage accounts**, **centralized crypto exchanges** (e.g. Bybit, Coinbase, Kraken), and **blockchain wallets** (Bitcoin, EVM chains, Solana). All API keys and wallet addresses are stored **encrypted at rest** and never exposed in API responses or logs.
+A comprehensive portfolio tracker that aggregates balances from **centralized crypto exchanges** (e.g. Bybit, Coinbase, Kraken) and **blockchain wallets** (Bitcoin, EVM chains, Solana). All API keys and wallet addresses are stored **encrypted at rest** and never exposed in API responses or logs.
 
 ## Features
 
-- **Banks & brokerage** – Link US accounts via [Plaid](https://plaid.com) (API required).
 - **Centralized exchanges** – Add any [CCXT](https://github.com/ccxt/ccxt)-supported exchange with API key + secret (stored encrypted).
 - **Blockchain wallets** – Read-only by address (no private keys): Bitcoin (mempool.space), EVM (Ethereum, Polygon, Arbitrum, Optimism, Base, Avalanche, BSC, Hyperliquid), Solana.
 - **Secure storage** – Credentials encrypted with Fernet (key from `ENCRYPTION_KEY` or derived from `SECRET_KEY`).
@@ -67,17 +66,7 @@ Run the copy and comment as two steps: `cp .env.example .env` then edit `.env` a
 
 **Upgrading from an older (user-based) version:** The app now uses local profiles instead of email sign-in. If you have an existing `backend/portfolio.db`, remove it and run again so the new schema (profiles table) is created. Export any data you need before deleting.
 
-### Optional: Plaid (banks/brokerage)
-
-1. Create a [Plaid](https://dashboard.plaid.com) account and get **Client ID** and **Secret**.
-2. In backend `.env` set:
-   - `PLAID_CLIENT_ID=...`
-   - `PLAID_SECRET=...`
-   - `PLAID_ENV=sandbox` (or `development` / `production`)
-
-Then use “Add account → Bank or brokerage” in the UI to open Plaid Link and link an account.
-
-### Adding other accounts
+### Adding accounts
 
 - **Exchange** – Choose provider (e.g. Binance), enter a label, API key, and secret. Optional passphrase for exchanges that use it (e.g. Coinbase). Credentials are encrypted before storage.
 - **Wallet** – Paste the **public address** only. Choose **EVM (all chains)** to see balances from every supported EVM chain (Ethereum, Polygon, Arbitrum, Optimism, Base, Avalanche, BSC, HyperEVM) in one place; or pick a single chain. **Solana** shows native SOL and all SPL tokens. **EVM** can show all tokens (native + ERC‑20) when `ALCHEMY_API_KEY` is set in backend `.env`; otherwise you’ll see native balances only. With **EVM (all chains)**, one address is queried across all chains and each balance is labeled (e.g. "ETH (Ethereum)", "USDC (Arbitrum)").
@@ -95,9 +84,9 @@ Then use “Add account → Bank or brokerage” in the UI to open Plaid Link an
 mantracker3/
 ├── backend/
 │   ├── app/
-│   │   ├── adapters/       # Plaid, CCXT, wallet (BTC/EVM/Solana)
+│   │   ├── adapters/       # CCXT, wallet (BTC/EVM/Solana)
 │   │   ├── models/         # Profile, Account, AccountCredential
-│   │   ├── routers/        # profiles, accounts, plaid, portfolio
+│   │   ├── routers/        # profiles, accounts, portfolio
 │   │   ├── security/      # encryption, profile-scoped access (X-Profile-Id)
 │   │   ├── services/       # credential store, portfolio aggregation
 │   │   ├── config.py
@@ -116,7 +105,7 @@ mantracker3/
 
 ## API overview
 
-All account/plaid/portfolio routes require the **X-Profile-Id** header (current profile id). Profile list/create/import/export do not.
+All account/portfolio routes require the **X-Profile-Id** header (current profile id). Profile list/create/import/export do not.
 
 | Endpoint | Description |
 |----------|-------------|
@@ -129,6 +118,4 @@ All account/plaid/portfolio routes require the **X-Profile-Id** header (current 
 | `GET /accounts` | List accounts (X-Profile-Id) |
 | `POST /accounts` | Add exchange or wallet (X-Profile-Id) |
 | `DELETE /accounts/{id}` | Remove account (X-Profile-Id) |
-| `GET /plaid/link_token` | Plaid link token (X-Profile-Id) |
-| `POST /plaid/exchange` | Exchange public token, create bank/brokerage account (X-Profile-Id) |
 | `GET /portfolio` | Aggregated balances (X-Profile-Id) |

@@ -11,7 +11,7 @@ export function setProfileId(id: number | null): void {
   else localStorage.setItem(PROFILE_ID_KEY, String(id));
 }
 
-/** Calls that require a profile (accounts, plaid, portfolio) send X-Profile-Id. */
+/** Calls that require a profile (accounts, portfolio) send X-Profile-Id. */
 export async function api<T>(
   path: string,
   options: RequestInit = {}
@@ -165,19 +165,6 @@ export const accounts = {
     }),
   delete: (id: number) =>
     api<{ ok: boolean }>(`/accounts/${id}`, { method: 'DELETE' }),
-};
-
-export const plaid = {
-  linkToken: () => api<{ link_token: string }>('/plaid/link_token'),
-  exchange: (public_token: string, account_name: string, account_type: string) =>
-    api<{ id: number; name: string; type: string }>('/plaid/exchange', {
-      method: 'POST',
-      body: JSON.stringify({
-        public_token,
-        account_name,
-        account_type,
-      }),
-    }),
 };
 
 const PORTFOLIO_TIMEOUT_MS = 90_000; // 90s so backend can finish under rate limits

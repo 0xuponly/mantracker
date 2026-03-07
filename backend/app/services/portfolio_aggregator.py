@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from app.db import AsyncSession
 from app.models import Account, AccountType
 from app.services.credential_store import decrypt_credential_payload
-from app.adapters import PlaidAdapter, ExchangeAdapter, WalletAdapter
+from app.adapters import ExchangeAdapter, WalletAdapter
 from app.adapters.base import AdapterResult, BalanceItem
 
 # Per-account timeout so one stuck adapter doesn't block the whole portfolio
@@ -23,7 +23,7 @@ async def fetch_account_balances(db: AsyncSession, account: Account) -> AdapterR
         return AdapterResult(balances=[], error="Invalid credentials")
 
     if account.type == AccountType.BANK or account.type == AccountType.BROKERAGE:
-        return await PlaidAdapter.fetch_balances(payload)
+        return AdapterResult(balances=[], error="Bank/brokerage integration has been removed")
     if account.type == AccountType.EXCHANGE:
         return await ExchangeAdapter.fetch_balances(account.provider or "binance", payload)
     if account.type == AccountType.WALLET:

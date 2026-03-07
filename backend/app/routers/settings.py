@@ -1,4 +1,4 @@
-"""App-level settings: manage encrypted API keys (Alchemy, Plaid, Solana RPC, etc.)."""
+"""App-level settings: manage encrypted API keys (Alchemy, Solana RPC, etc.)."""
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select

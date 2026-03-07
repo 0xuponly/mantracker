@@ -1,90 +1,27 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { accounts, plaid } from '../api'
+import { accounts } from '../api'
 import { detectAddressType, splitList } from '../utils/addressDetection'
 import './AddAccount.css'
 
-type Flow = 'choose' | 'plaid' | 'exchange' | 'wallet'
+type Flow = 'choose' | 'exchange' | 'wallet'
 
 const EXCHANGE_PROVIDERS = [
   'binance', 'coinbase', 'kraken', 'kucoin', 'bybit', 'okx', 'gateio', 'bitfinex', 'gemini', 'bitstamp',
 ]
 
-declare global {
-  interface Window {
-    Plaid?: {
-      create: (config: {
-        token: string;
-        onSuccess: (public_token: string) => void;
-        onExit: (err: unknown) => void;
-        onEvent?: (name: string, meta: unknown) => void;
-      }) => { open: () => void };
-    };
-  }
-}
-
 export default function AddAccount() {
   const [flow, setFlow] = useState<Flow>('choose')
-  const [plaidReady, setPlaidReady] = useState(false)
   const [exchangeName, setExchangeName] = useState('')
   const [exchangeApiKey, setExchangeApiKey] = useState('')
   const [exchangeSecret, setExchangeSecret] = useState('')
   const [exchangePassphrase, setExchangePassphrase] = useState('')
   const [walletAddress, setWalletAddress] = useState('')
   const [accountName, setAccountName] = useState('')
-  const [plaidAccountName, setPlaidAccountName] = useState('')
-  const [plaidAccountType, setPlaidAccountType] = useState<'bank' | 'brokerage'>('bank')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const navigate = useNavigate()
-
-  // Load Plaid script
-  useEffect(() => {
-    if (flow !== 'plaid') return
-    if (document.getElementById('plaid-script')) {
-      setPlaidReady(!!window.Plaid)
-      return
-    }
-    const script = document.createElement('script')
-    script.id = 'plaid-script'
-    script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js'
-    script.onload = () => setPlaidReady(true)
-    document.head.appendChild(script)
-  }, [flow])
-
-  const openPlaid = useCallback(async () => {
-    setError('')
-    try {
-      const { link_token } = await plaid.linkToken()
-      if (!window.Plaid) {
-        setError('Plaid not loaded. Refresh and try again.')
-        return
-      }
-      window.Plaid.create({
-        token: link_token,
-        onSuccess: async (public_token) => {
-          setLoading(true)
-          setError('')
-          try {
-            await plaid.exchange(
-              public_token,
-              plaidAccountName || 'Plaid account',
-              plaidAccountType
-            )
-            navigate('/accounts')
-          } catch (e) {
-            setError(e instanceof Error ? e.message : 'Exchange failed')
-          } finally {
-            setLoading(false)
-          }
-        },
-        onExit: () => {},
-      }).open()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start Plaid')
-    }
-  }, [plaidAccountName, plaidAccountType, navigate])
 
   async function handleAddExchange(e: React.FormEvent) {
     e.preventDefault()
@@ -174,11 +111,6 @@ export default function AddAccount() {
 
       {flow === 'choose' && (
         <div className="flow-cards">
-          <button type="button" className="flow-card" onClick={() => setFlow('plaid')}>
-            <span className="flow-icon">🏦</span>
-            <strong>Bank or brokerage</strong>
-            <span className="flow-desc">Link via Plaid (US)</span>
-          </button>
           <button type="button" className="flow-card" onClick={() => setFlow('exchange')}>
             <span className="flow-icon">📊</span>
             <strong>Centralized exchange</strong>
@@ -188,42 +120,6 @@ export default function AddAccount() {
             <span className="flow-icon">🔗</span>
             <strong>Blockchain wallet</strong>
             <span className="flow-desc">Read-only address (BTC, ETH, SOL, …)</span>
-          </button>
-        </div>
-      )}
-
-      {flow === 'plaid' && (
-        <div className="flow-form">
-          <label>
-            Account name
-            <input
-              type="text"
-              placeholder="e.g. Chase Checking"
-              value={plaidAccountName}
-              onChange={(e) => setPlaidAccountName(e.target.value)}
-            />
-          </label>
-          <label>
-            Type
-            <select
-              value={plaidAccountType}
-              onChange={(e) => setPlaidAccountType(e.target.value as 'bank' | 'brokerage')}
-            >
-              <option value="bank">Bank</option>
-              <option value="brokerage">Brokerage</option>
-            </select>
-          </label>
-          {error && <div className="error">{error}</div>}
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={openPlaid}
-            disabled={loading || !plaidReady}
-          >
-            {!plaidReady ? 'Loading Plaid…' : loading ? 'Linking…' : 'Open Plaid Link'}
-          </button>
-          <button type="button" className="btn-link" onClick={() => setFlow('choose')}>
-            Cancel
           </button>
         </div>
       )}

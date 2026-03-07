@@ -79,7 +79,7 @@ export default function Accounts() {
         <h1>Accounts</h1>
         <Link to="/accounts/add" className="btn-primary">Add account</Link>
       </div>
-      <p className="muted">Bank and brokerage accounts are added via Plaid. Exchanges and wallets use API keys or addresses (stored encrypted).</p>
+      <p className="muted">Exchanges and wallets use API keys or addresses (stored encrypted).</p>
       {list.length === 0 ? (
         <div className="empty-state">
           <p>No accounts yet.</p>
