@@ -404,7 +404,6 @@ export default function Dashboard() {
               />
             </svg>
           </button>
-          <Link to="/accounts/add" className="btn-primary">Add account</Link>
         </div>
       </div>
 
