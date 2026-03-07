@@ -37,11 +37,6 @@
   color: var(--text);
 }
 
-.profile-name {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-}
-
 .nav-link {
   font-size: 0.9rem;
 }

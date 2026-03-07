@@ -79,6 +79,9 @@ export default function Dashboard() {
   const [accountsError, setAccountsError] = useState('')
   const [hideLowBalance, setHideLowBalance] = useState(true)
   const [balancesVisible, setBalancesVisible] = useState(true)
+  const [hiddenAccountIds, setHiddenAccountIds] = useState<Set<number>>(() => new Set())
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false)
+  const filterDropdownRef = useRef<HTMLDivElement>(null)
   const byAccountRef = useRef<Record<number, BalanceState>>({})
   const retryCountRef = useRef<Map<number, number>>(new Map())
   const retryTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
@@ -89,6 +92,18 @@ export default function Dashboard() {
   const fetchProfileIdRef = useRef<number | string | null>(null)
   const { currentProfile } = useProfile()
   const profileId = currentProfile?.id ?? null
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    if (!filterDropdownOpen) return
+    function handleClick(e: MouseEvent) {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+        setFilterDropdownOpen(false)
+      }
+    }
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [filterDropdownOpen])
 
   // Load account list when profile is set; refetch when profile changes.
   // When list arrives, seed byAccountId from cache in the same callback so cached balances show on first paint.
@@ -344,6 +359,51 @@ export default function Dashboard() {
       <div className="page-header">
         <h1>Portfolio</h1>
         <div className="page-header-actions">
+          {hasAccounts && (
+            <div className="filter-dropdown-wrap" ref={filterDropdownRef}>
+              <button
+                type="button"
+                className="btn-secondary btn-icon"
+                onClick={() => setFilterDropdownOpen((v) => !v)}
+                title="Show or hide account cards"
+                aria-label="Filter account cards"
+                aria-expanded={filterDropdownOpen}
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+                </svg>
+              </button>
+              {filterDropdownOpen && (
+                <div className="filter-dropdown">
+                  <span className="filter-dropdown-title">Show cards</span>
+                  <ul className="filter-dropdown-list">
+                    {accountList.map((acc) => {
+                      const isVisible = !hiddenAccountIds.has(acc.id)
+                      return (
+                        <li key={acc.id}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={isVisible}
+                              onChange={() => {
+                                setHiddenAccountIds((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(acc.id)) next.delete(acc.id)
+                                  else next.add(acc.id)
+                                  return next
+                                })
+                              }}
+                            />
+                            <span>{acc.name}</span>
+                          </label>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
           <button
             type="button"
             className="btn-secondary btn-icon"
@@ -415,6 +475,7 @@ export default function Dashboard() {
       ) : (
         <div className="portfolio-grid">
           {[...accountList]
+            .filter((acc) => !hiddenAccountIds.has(acc.id))
             .sort((a, b) => {
               const diff = accountTotalUsd(b.id) - accountTotalUsd(a.id)
               if (diff !== 0) return diff

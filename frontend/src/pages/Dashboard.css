@@ -28,6 +28,62 @@
   display: block;
 }
 
+.filter-dropdown-wrap {
+  position: relative;
+}
+
+.filter-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.25rem;
+  min-width: 12rem;
+  padding: 0.5rem 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.filter-dropdown-title {
+  display: block;
+  padding: 0.25rem 1rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.filter-dropdown-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.filter-dropdown-list li {
+  margin: 0;
+}
+
+.filter-dropdown-list label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-dropdown-list label:hover {
+  background: var(--bg);
+}
+
+.filter-dropdown-list input[type="checkbox"] {
+  cursor: pointer;
+}
+
 .toggle-low-balance {
   display: flex;
   align-items: center;
