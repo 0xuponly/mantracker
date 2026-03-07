@@ -460,7 +460,7 @@ export default function Dashboard() {
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
               <path
                 fill="currentColor"
-                d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 6h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L14 10h7V3l-3.35 3.35z"
+                d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
               />
             </svg>
           </button>
@@ -515,8 +515,8 @@ export default function Dashboard() {
                   >
                     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
                       <path
-                        d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 6h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L14 10h7V3l-3.35 3.35z"
                         fill="currentColor"
+                        d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
                       />
                     </svg>
                   </button>
