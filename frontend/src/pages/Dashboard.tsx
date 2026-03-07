@@ -6,6 +6,7 @@ import { useProfile } from '../ProfileContext'
 import { readBalancesCache, writeBalancesCache } from '../utils/accountBalancesCache'
 import { readPortfolioCache } from '../utils/portfolioCache'
 import { readAccountsCache, writeAccountsCache } from '../utils/accountsCache'
+import { getDashboardPrefs, setDashboardPrefs } from '../utils/dashboardPrefs'
 import './Dashboard.css'
 
 const LOW_BALANCE_THRESHOLD = 1
@@ -82,6 +83,7 @@ export default function Dashboard() {
   const [hiddenAccountIds, setHiddenAccountIds] = useState<Set<number>>(() => new Set())
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false)
   const filterDropdownRef = useRef<HTMLDivElement>(null)
+  const skipNextSaveRef = useRef(false)
   const byAccountRef = useRef<Record<number, BalanceState>>({})
   const retryCountRef = useRef<Map<number, number>>(new Map())
   const retryTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
@@ -92,6 +94,30 @@ export default function Dashboard() {
   const fetchProfileIdRef = useRef<number | string | null>(null)
   const { currentProfile } = useProfile()
   const profileId = currentProfile?.id ?? null
+
+  // Load persisted dashboard prefs when profile changes
+  useEffect(() => {
+    if (profileId == null) return
+    const prefs = getDashboardPrefs(profileId)
+    setHideLowBalance(prefs.hideLowBalance)
+    setBalancesVisible(prefs.balancesVisible)
+    setHiddenAccountIds(new Set(prefs.hiddenAccountIds))
+    skipNextSaveRef.current = true // avoid save effect overwriting with stale state on same tick
+  }, [profileId])
+
+  // Persist dashboard prefs when toggles change (skip first run after load — state not yet updated)
+  useEffect(() => {
+    if (profileId == null) return
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false
+      return
+    }
+    setDashboardPrefs(profileId, {
+      hideLowBalance,
+      balancesVisible,
+      hiddenAccountIds: Array.from(hiddenAccountIds),
+    })
+  }, [profileId, hideLowBalance, balancesVisible, hiddenAccountIds])
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
